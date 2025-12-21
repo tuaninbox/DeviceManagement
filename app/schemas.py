@@ -15,7 +15,7 @@ class SoftwareVersionBase(BaseModel):
     last_scanned: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class SoftwareInfoBase(BaseModel):
     firmware_version: Optional[str]
@@ -109,37 +109,37 @@ class SoftwareInfo(SoftwareInfoBase):
     id: int
     version: SoftwareVersionBase
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Module(ModuleBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Interface(InterfaceBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class RunningConfig(RunningConfigBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class RoutingTable(RoutingTableBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class MacAddressTable(MacAddressTableBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class VLAN(VLANBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Device(DeviceBase):
     id: int
@@ -152,4 +152,4 @@ class Device(DeviceBase):
     vlans: List[VLAN] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True

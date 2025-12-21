@@ -3,6 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from .. import crud, database
+# from sqlalchemy import func
+from sqlalchemy import func
+from app import models, schemas
 from load_inventory import collect_inventory  # your script
 from app.normalizers.device_normalizer import (
     normalize_device,
@@ -39,12 +42,21 @@ def create_device(device: schemas.DeviceCreate, db: Session = Depends(get_db)):
 def list_devices(db: Session = Depends(get_db)):
     return crud.get_devices(db)
 
-@router.get("/{device_id}", response_model=schemas.Device)
-def get_device(device_id: int, db: Session = Depends(get_db)):
-    db_device = crud.get_device(db, device_id=device_id)
-    if not db_device:
-        raise HTTPException(status_code=404, detail="Device not found")
-    return db_device
+@router.get("/{hostname}", response_model=schemas.Device)
+def get_device_by_hostname(hostname: str, db: Session = Depends(get_db)):
+    device = (
+        db.query(models.Device)
+        .filter(func.lower(models.Device.hostname) == hostname.lower())
+        .first()
+    )
+
+    if not device:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Device '{hostname}' not found"
+        )
+
+    return device
 
 @router.post("/sync")
 def sync_devices(db: Session = Depends(get_db)):
