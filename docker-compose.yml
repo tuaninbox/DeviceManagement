@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: device_management_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - ./devices.db:/app/devices.db
+    environment:
+      - SQLALCHEMY_DATABASE_URL=sqlite:///./devices.db
+    restart: always
