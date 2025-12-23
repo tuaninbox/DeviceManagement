@@ -1,7 +1,7 @@
 import os, getpass, configparser
 
 from core.logging_manager import setup_loggers
-# from config.config_loader import load_account_config, load_nagios_config
+from config.config_loader import load_account_config#, load_nagios_config
 
 # Initialize loggers for this module
 success_logger, fail_logger = setup_loggers(logger_name="credential")
@@ -12,16 +12,16 @@ def get_credentials():
     password = None
 
     # Expand ~ to full path
-    # filename = os.path.expanduser(load_account_config())
+    filename = os.path.expanduser(load_account_config())
 
     # 1. Try reading from credential file using configparser
-    # if os.path.exists(filename):
-    #     config = configparser.ConfigParser()
-    #     config.read(filename)
+    if os.path.exists(filename):
+        config = configparser.ConfigParser()
+        config.read(filename)
 
-    #     if "credentials" in config:
-    #         username = config["credentials"].get("username")
-    #         password = config["credentials"].get("password")
+        if "credentials" in config:
+            username = config["credentials"].get("username")
+            password = config["credentials"].get("password")
 
     # 2. Fall back to environment variables
     if not username:

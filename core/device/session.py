@@ -15,13 +15,14 @@ import configparser
 from pathlib import Path
 
 class DeviceSession:
-    def __init__(self, hostname, host, os, user, password, cmdlist, success_logger=None, fail_logger=None, debug=0, outfolder="output", sanitizeconfig=True, removepassword: int = 1|2|4|8):
+    def __init__(self, hostname, host, os, user, password, cmdlist, port: int=22, success_logger=None, fail_logger=None, debug=0, outfolder="output", sanitizeconfig=True, removepassword: int = 1|2|4|8):
         self.hostname = hostname
         self.host = host
         self.os = os
         self.user = user
         self.password = password
         self.cmdlist = cmdlist
+        self.port = port
         self.success_logger = success_logger
         self.fail_logger = fail_logger
         self.debug = debug
@@ -58,6 +59,7 @@ class DeviceSession:
             "ip": self.host,
             "username": self.user,
             "password": self.password,
+            "port": self.port, 
         }
         if optional_args:
             conn_params.update(optional_args)

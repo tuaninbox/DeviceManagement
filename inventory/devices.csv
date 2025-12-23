@@ -1,4 +1,6 @@
 Host,IP,Port,Location,Group,OS
-R1,192.168.2.223,,DC,lab,ios
-R2,192.168.2.86,,DC,lab,ios
-R3,192.168.2.85,,DC,prod,ios
+#R1,192.168.2.223,,DC,lab,ios
+#R2,192.168.2.86,,DC,lab,ios
+#R3,192.168.2.85,,DC,prod,ios
+r1,localhost,2221,DC,lab,ios
+r2,localhost,2222,DC,lab,nxos

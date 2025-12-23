@@ -44,6 +44,7 @@ def run_parallel(
                 user=username,
                 password=password,
                 cmdlist=device_cmds,
+                port=row["Port"],
                 sanitizeconfig=sanitizeconfig,
                 removepassword=removepassword,
                 **extra_kwargs
