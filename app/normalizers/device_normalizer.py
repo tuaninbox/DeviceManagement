@@ -1,8 +1,10 @@
 # app/normalizers/device_normalizer.py
-
-from datetime import timedelta
+from typing import List, Dict, Any
+from datetime import datetime
 import re
+from core.logging_manager import setup_loggers
 
+success_logger, fail_logger = setup_loggers(logger_name="app_normalizers")
 
 # ------------------------------------------------------------
 # ✅ Convert uptime string → integer seconds
@@ -71,21 +73,67 @@ def normalize_interfaces(raw: dict) -> list:
 # ------------------------------------------------------------
 # ✅ Normalize Modules (raw → Module table)
 # ------------------------------------------------------------
-def normalize_modules(raw: dict) -> list:
-    modules = raw.get("modules", [])
+# def normalize_modules(raw: dict) -> list[dict]:
+#     """
+#     Normalize raw module data from inventory collection into DB-ready dicts.
+#     """
+#     modules = []
+#     for entry_name, v in raw.get("modules", {}).items():
+#         modules.append({
+#             "name": entry_name.strip(),
+#             "description": v.get("descr") or v.get("description"),
+#             "part_number": v.get("pid") or v.get("part_number"),
+#             "serial_number": v.get("sn") or v.get("serial_number"),
+#             "hw_revision": v.get("hw_rev") or v.get("vid") or v.get("hardware_revision"),
+#             "under_warranty": v.get("under_warranty", False),   
+#             "warranty_expiry": v.get("warranty_expiry"),
+#             "environment_status": v.get("environment_status"),
+#             "last_updated": datetime.utcnow(),
+#         })
+#     return modules
+def normalize_modules(raw: dict) -> list[dict]:
+    """
+    Normalize raw module data from inventory collection into DB-ready dicts.
+    Handles both list and dict formats, with logging.
+    """
+    modules = []
+    raw_modules = raw.get("modules", [])
 
-    normalized = []
-    for mod in modules:
-        normalized.append({
-            "description": mod.get("model"),
-            "serial_number": mod.get("serial"),
-            "part_number": None,
-            "warranty_from": None,
-            "warranty_expiry": None,
-            "environment_status": None,
-        })
+    if isinstance(raw_modules, dict):
+        iterable = raw_modules.items()
+    elif isinstance(raw_modules, list):
+        iterable = enumerate(raw_modules)
+    else:
+        fail_logger.error(
+            f"Unexpected modules format for device {raw.get('host_info', {}).get('hostname')}: {type(raw_modules)}"
+        )
+        return modules
 
-    return normalized
+    for entry_name, v in iterable:
+        try:
+            module = {
+                "name": str(entry_name).strip(),
+                "description": v.get("descr") or v.get("description"),
+                "part_number": v.get("pid") or v.get("part_number"),
+                "serial_number": v.get("sn") or v.get("serial_number"),
+                "hw_revision": v.get("hw_rev") or v.get("vid") or v.get("hardware_revision"),
+                "under_warranty": v.get("under_warranty", False),
+                "warranty_expiry": v.get("warranty_expiry"),
+                "environment_status": v.get("environment_status"),
+                "last_updated": datetime.utcnow(),
+            }
+            modules.append(module)
+        except Exception as e:
+            fail_logger.error(
+                f"Failed to normalize module entry {entry_name} for device {raw.get('host_info', {}).get('hostname')}: {e}",
+                exc_info=True,
+            )
+
+    success_logger.info(
+        f"Normalized {len(modules)} modules for device {raw.get('host_info', {}).get('hostname')}"
+    )
+    return modules
+
 
 def normalize_software_info(raw):
     host = raw.get("host_info", {})

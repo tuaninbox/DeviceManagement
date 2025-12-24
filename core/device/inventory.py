@@ -4,29 +4,31 @@ class DeviceInventoryCollector(DeviceSession):
     def get_host_info(self):
         try:
             """
-            Gather host information (version, uptime, serial, model).
-            Uses _run_session for execution, Genie for parsing Cisco outputs.
+            Updated workflow:
+            1. Run show version
+            2. Run show ip interface brief (IOS/IOSXE)
+            Run show ip interface brief vrf all (NXOS)
+            3. Determine which interface has the management IP
+            4. Query VRF for that interface using:
+            - IOS/IOSXE: show run interface <intf>
+            - NXOS:      show run interface <intf>
             """
+
             os_cmds = {
                 "ios": ["show version"],
                 "iosxe": ["show version"],
                 "nxos": ["show version"],
-                "aironet": ["show sysinfo"],
-                "dellos10": ["show version"],
-                "f5": ["show sys version"],
             }
 
             commands = os_cmds.get(self.os.lower())
             if not commands:
                 raise ValueError(f"Unsupported OS type: {self.os}")
 
-            # Save current cmdlist and override
             original_cmdlist = self.cmdlist
             self.cmdlist = commands
 
-            # Run session (reuses connection + sanitization)
+            # Run both commands
             result = self._run_session(out_format="json")
-            # Restore original cmdlist
             self.cmdlist = original_cmdlist
 
             host_info = {
@@ -37,40 +39,25 @@ class DeviceInventoryCollector(DeviceSession):
                 "uptime": None,
                 "serial": None,
                 "model": None,
+                "mgmt_interface": None,
+                "mgmt_vrf": None,
             }
 
-            if result.get("success"):
-                output = result["output"]
-                # print(result)
+            if not result.get("success"):
+                return host_info
 
-                # Genie JSON output is nested under command key
-                if self.os.lower() in ["ios", "iosxe", "nxos"]:
-                    if isinstance(output, dict):
-                        try:
-                            show_ver = output.get("show version", {})
-                            version_info = show_ver.get("version", {})
+            output = result["output"]
 
-                            host_info["version"] = version_info.get("version")
-                            host_info["uptime"] = version_info.get("uptime")
-                            host_info["serial"] = version_info.get("chassis_sn") or version_info.get("processor_board_id")
-                            host_info["model"] = version_info.get("platform") or version_info.get("chassis")
-                        except Exception as e:
-                            print(f"Genie parse failed: {e}")
-                            # fallback: try to parse text if Genie fails
-                            raw_text = output.get("show version")
-                            if isinstance(raw_text, str):
-                                host_info["version"] = self._fallback_parse_version(raw_text)
-                    elif isinstance(output, str):
-                        host_info["version"] = self._fallback_parse_version(output)
-                else:
-                    # Non-Cisco fallback
-                    if isinstance(output, dict):
-                        raw_text = output.get(commands[0], "")
-                        if isinstance(raw_text, str):
-                            host_info["version"] = self._fallback_parse_version(raw_text)
-                    elif isinstance(output, str):
-                        host_info["version"] = self._fallback_parse_version(output)
+            # -----------------------------
+            # 1. Parse show version
+            # -----------------------------
+            show_ver = output.get("show version", {})
+            version_info = show_ver.get("version", {})
 
+            host_info["version"] = version_info.get("version")
+            host_info["uptime"] = version_info.get("uptime")
+            host_info["serial"] = version_info.get("chassis_sn") or version_info.get("processor_board_id")
+            host_info["model"] = version_info.get("chassis") or version_info.get("platform")
             return host_info
 
         except Exception as e:
@@ -82,9 +69,6 @@ class DeviceInventoryCollector(DeviceSession):
                 "line": tb.lineno,
                 "code": tb.line
             }
-            fail_msg = f"{e} at {tb.filename}:{tb.lineno} - {tb.line}" if self.debug else e
-            if self.fail_logger:
-                self.fail_logger.error(f"{self.hostname} - {self.host} - {fail_msg}")
             return self.result
 
 
@@ -98,64 +82,54 @@ class DeviceInventoryCollector(DeviceSession):
     def get_interfaces(self):
         try:
             """
-            Gather interface information:
-            - name
-            - interface status (oper_status)
-            - line protocol status
-            - type (physical interface type)
-            Uses _run_session for execution, Genie for parsing Cisco outputs.
-            """
-            os_cmds = {
-                "ios": ["show interface"],
-                "iosxe": ["show interface"],
-                "nxos": ["show interface"],
-                "aironet": ["show interface summary"],
-                "dellos10": ["show interface"],
-                "f5": ["tmsh show net interface"],
-            }
-            commands = os_cmds.get(self.os.lower())
-            if not commands:
-                raise ValueError(f"Unsupported OS type: {self.os}")
+            Collect detailed interface information and VRF membership.
 
+            Commands used:
+            - IOS/IOSXE:
+                show interface
+                show vrf
+            - NXOS:
+                show interface
+                show vrf interface
+            """
+
+            # -----------------------------
+            # Determine commands
+            # -----------------------------
+            if self.os.lower() in ["ios", "iosxe"]:
+                cmd_interface = "show interface"
+                cmd_vrf = "show vrf"
+            elif self.os.lower() == "nxos":
+                cmd_interface = "show interface"
+                cmd_vrf = "show vrf interface"
+            else:
+                raise ValueError(f"Unsupported OS type for VRF lookup: {self.os}")
+
+            # -----------------------------
+            # Run both commands in one session
+            # -----------------------------
             original_cmdlist = self.cmdlist
-            self.cmdlist = commands
+            self.cmdlist = [cmd_interface, cmd_vrf]
             result = self._run_session(out_format="json")
             self.cmdlist = original_cmdlist
 
-            interfaces = []
+            if not result.get("success"):
+                return []
 
-            if result.get("success"):
-                output = result["output"]
-                cmd = commands[0]
-        
-                # Cisco Genie structured output
-                if self.os.lower() in ["ios", "iosxe", "nxos"]:
-                    if isinstance(output, dict):
-                        parsed = output.get(cmd, {})
-                        try:
-                            # Genie "show interface" returns dict keyed by interface name
-                            for name, data in parsed.items():
-                                # Only include physical interfaces (skip deleted/virtual if needed)
-                                if not data.get("is_deleted", False):
-                                    interfaces.append({
-                                        "name": name,
-                                        "status": data.get("oper_status"),       # up/down
-                                        "line_protocol": data.get("line_protocol"),  # up/down
-                                        "type": data.get("type"),                # e.g. Ethernet, Loopback, etc.
-                                    })
-                        except Exception as e:
-                            if self.fail_logger:
-                                self.fail_logger.error(f"{self.hostname} - Genie parse failed: {e}")
-                            raw_text = output.get(cmd)
-                            if isinstance(raw_text, str):
-                                interfaces.extend(self._fallback_parse_interfaces(raw_text))
-                    elif isinstance(output, str):
-                        interfaces.extend(self._fallback_parse_interfaces(output))
-                else:
-                    # Non-Cisco fallback
-                    raw_text = output.get(cmd)
-                    if isinstance(raw_text, str):
-                        interfaces.extend(self._fallback_parse_interfaces(raw_text))
+            output = result["output"]
+
+            # -----------------------------
+            # Build VRF map
+            # -----------------------------
+            vrf_map = self._parse_vrf_map(output.get(cmd_vrf, {}))
+
+            # -----------------------------
+            # Parse interface details
+            # -----------------------------
+            interfaces = self._parse_interface_details(
+                output.get(cmd_interface, {}),
+                vrf_map
+            )
 
             return interfaces
 
@@ -170,56 +144,69 @@ class DeviceInventoryCollector(DeviceSession):
             }
             return self.result
 
+    def _parse_vrf_map(self, vrf_output):
+        vrf_map = {}
 
-    def _fallback_parse_interfaces(self, output: str):
-        """
-        Fallback parser for 'show interface' text output.
-        Extracts: name, oper_status, line_protocol, type.
-        """
+        if self.os.lower() in ["ios", "iosxe"]:
+            # Genie structure: vrf -> interfaces list
+            for vrf_name, data in vrf_output.items():
+                interfaces = data.get("interfaces", [])
+                for intf in interfaces:
+                    vrf_map[intf] = vrf_name
+
+        elif self.os.lower() == "nxos":
+            # Genie structure: dict of interfaces
+            for intf, data in vrf_output.items():
+                vrf_map[intf] = data.get("vrf", "default")
+
+        return vrf_map
+
+    def _parse_interface_details(self, parsed, vrf_map):
         interfaces = []
-        current_intf = None
 
-        for line in output.splitlines():
-            line = line.strip()
-            if not line:
+        if not isinstance(parsed, dict):
+            return interfaces
+
+        for name, data in parsed.items():
+            if data.get("is_deleted", False):
                 continue
 
-            # Typical IOS/NXOS line: "Ethernet0/0 is up, line protocol is up"
-            if "line protocol" in line:
-                parts = line.split()
-                name = parts[0]
-                oper_status = "up" if "is up" in line and "administratively down" not in line else "down"
-                line_protocol = "up" if "line protocol is up" in line else "down"
+            iface = {
+                "name": name,
+                "status": data.get("oper_status"),
+                "line_protocol": data.get("line_protocol"),
+                "description": data.get("description"),
+                "mac_address": data.get("mac_address"),
+                "mtu": data.get("mtu"),
+                "speed": data.get("speed"),
+                "duplex": data.get("duplex"),
+                "type": data.get("type"),
+                "auto_mdix": data.get("auto_mdix"),
+                "negotiation": data.get("negotiation"),
+                "ip_address": None,
+                "subnet_mask": None,
+                "vrf": vrf_map.get(name),
+            }
 
-                current_intf = {
-                    "name": name,
-                    "status": oper_status,
-                    "line_protocol": line_protocol,
-                    "type": None,  # will fill from later line if available
-                }
-                interfaces.append(current_intf)
+            # IPv4 block
+            ipv4 = data.get("ipv4")
+            if isinstance(ipv4, dict):
+                for ip, ipinfo in ipv4.items():
+                    iface["ip_address"] = ip
+                    iface["subnet_mask"] = ipinfo.get("prefix_length")
+                    break
 
-            # Type line example: "Hardware is AmdP2, address is aabb.cc00.0100"
-            elif line.lower().startswith("hardware is") and current_intf:
-                try:
-                    hw_type = line.split("Hardware is")[1].split(",")[0].strip()
-                    current_intf["type"] = hw_type
-                except Exception:
-                    pass
+            interfaces.append(iface)
 
         return interfaces
 
     
     def get_modules(self):
         try:
-            """
-            Gather module information (slot, model, serial).
-            Uses _run_session for execution, Genie for parsing Cisco outputs.
-            """
             os_cmds = {
-                "ios": ["show module"],
-                "iosxe": ["show module"],
-                "nxos": ["show module"],
+                "ios": ["show inventory"],
+                "iosxe": ["show inventory"],
+                "nxos": ["show inventory"],   # use show inventory for consistency
                 "aironet": ["show inventory"],
                 "dellos10": ["show inventory"],
                 "f5": ["show sys hardware"],
@@ -235,35 +222,56 @@ class DeviceInventoryCollector(DeviceSession):
             self.cmdlist = original_cmdlist
 
             modules = []
+            cmd = commands[0]
 
-            if result.get("success"):
-                output = result["output"]
-                cmd = commands[0]
-                parsed = output.get(cmd, {})
+            if not result.get("success"):
+                return modules
 
-                if self.os.lower() in ["ios", "iosxe", "nxos"]:
-                    if isinstance(output, dict):
-                        parsed = output.get(cmd, {})
-                        try:
-                            mod_info = parsed.get("slot", {})
-                            for slot, data in mod_info.items():
-                                modules.append({
-                                    "slot": slot,
-                                    "model": data.get("model"),
-                                    "serial": data.get("serial_number"),
-                                    "status": data.get("status"),
-                                })
-                        except Exception as e:
-                            print(f"Genie parse failed: {e}")
-                            raw_text = output.get(cmd)
-                            if isinstance(raw_text, str):
-                                modules.extend(self._fallback_parse_modules(raw_text))
-                    elif isinstance(output, str):
-                        modules.extend(self._fallback_parse_modules(output))
-                else:
-                    raw_text = output.get(cmd)
-                    if isinstance(raw_text, str):
-                        modules.extend(self._fallback_parse_modules(raw_text))
+            parsed = result["output"].get(cmd, {})
+
+            def walk_inventory(inv):
+                if not isinstance(inv, dict):
+                    return
+
+                for k, v in inv.items():
+                    if isinstance(v, dict):
+                        # Leaf entry: has inventory fields
+                        if any(field in v for field in (
+                            "pid", "product_id", "descr", "description",
+                            "sn", "serial_number", "vid", "hw_rev", "hardware_revision"
+                        )):
+                            entry_name = (
+                                v.get("name")           # Genie often provides a proper name here
+                                or k                    # fallback to dict key
+                                or v.get("pid")         # fallback to PID
+                                or v.get("product_id")  # fallback to product_id
+                                or "unknown"            # last resort
+                            )
+                            modules.append({
+                                "name": entry_name.strip(),
+                                "description": v.get("descr") or v.get("description"),
+                                "pid": v.get("pid") or v.get("product_id"),
+                                "part_number": v.get("pid") or v.get("part_number"),
+                                "serial_number": v.get("sn") or v.get("serial_number"),
+                                "hw_revision": v.get("hw_revision") or v.get("vid") or v.get("hardware_revision"),
+                                # "type": self._classify_module_type(entry_name, v.get("descr") or v.get("description")),
+                                # "model": v.get("pid") or v.get("product_id"),
+                            })
+                        else:
+                            # Not a leaf, recurse deeper
+                            walk_inventory(v)
+
+            if isinstance(parsed, dict):
+                walk_inventory(parsed)
+            else:
+                raw = result["output"].get(cmd)
+                if isinstance(raw, str):
+                    if self.os.lower() == "nxos":
+                        modules.extend(self._fallback_parse_nxos_hardware(raw))
+                    elif self.os.lower() in ["ios","iosxe","aironet","dellos10"]:
+                        modules.extend(self._fallback_parse_inventory(raw))
+                    elif self.os.lower() == "f5":
+                        modules.extend(self._fallback_parse_f5_hardware(raw))
 
             return modules
 
@@ -279,17 +287,97 @@ class DeviceInventoryCollector(DeviceSession):
             return self.result
 
 
-    def _fallback_parse_modules(self, output: str):
+    def _classify_module_type(self, name, descr):
+        text = f"{name} {descr}".lower()
+
+        if "sup" in text or "supervisor" in text:
+            return "supervisor"
+        if "line card" in text or "ethernet module" in text:
+            return "linecard"
+        if "power" in text or "psu" in text:
+            return "power_supply"
+        if "fan" in text:
+            return "fan"
+        if "sfp" in text or "transceiver" in text:
+            return "transceiver"
+        if "chassis" in text:
+            return "chassis"
+
+        return "module"
+
+
+
+    def _fallback_parse_inventory(self, text):
         modules = []
-        for line in output.splitlines():
-            if line and not line.startswith("Slot"):
+        current = {}
+
+        for line in text.splitlines():
+            line = line.strip()
+
+            if line.startswith("NAME:"):
+                if current:
+                    modules.append(current)
+                current = {
+                    "name": line.split("NAME:", 1)[1].split(",", 1)[0].strip('" '),
+                    "description": None,
+                    "pid": None,
+                    "serial": None,
+                    "part_number": None,
+                    "hw_revision": None,
+                    "type": None,
+                    "model": None,
+                }
+
+            elif "DESCR:" in line:
+                current["description"] = line.split("DESCR:", 1)[1].strip('" ')
+
+            elif "PID:" in line:
                 parts = line.split()
-                if len(parts) >= 3:
-                    modules.append({
-                        "slot": parts[0],
-                        "model": parts[1],
-                        "serial": parts[2],
-                    })
+                current["pid"] = parts[1]
+                current["part_number"] = parts[3] if len(parts) > 3 else None
+                current["serial"] = parts[5] if len(parts) > 5 else None
+                current["model"] = current["pid"]
+
+        if current:
+            modules.append(current)
+
+        return modules
+    
+    def _fallback_parse_nxos_hardware(self, text):
+        modules = []
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            parts = line.split()
+            if len(parts) >= 4:
+                modules.append({
+                    "name": parts[0],
+                    "description": " ".join(parts[1:-2]),
+                    "pid": parts[-2],
+                    "serial": parts[-1],
+                    "type": self._classify_module_type(parts[0], parts[1]),
+                    "model": parts[-2],
+                })
+        return modules
+
+
+    def _fallback_parse_f5_hardware(self, text):
+        modules = []
+        for line in text.splitlines():
+            if "Chassis" in line or "Platform" in line:
+                continue
+            if ":" in line:
+                key, val = line.split(":", 1)
+                modules.append({
+                    "name": key.strip(),
+                    "description": val.strip(),
+                    "pid": None,
+                    "serial": None,
+                    "part_number": None,
+                    "hw_revision": None,
+                    "type": "hardware",
+                    "model": None,
+                })
         return modules
 
     def get_inventory(self):
@@ -318,6 +406,7 @@ class DeviceInventoryCollector(DeviceSession):
                 "code": tb.line
             }
             return self.result
+
 
 if __name__=="__main__":
     pass

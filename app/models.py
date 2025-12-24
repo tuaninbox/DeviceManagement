@@ -1,6 +1,6 @@
 # SQLAlchemy ORM Models
 from sqlalchemy import (
-    Column, Integer, String, Text, Date, DateTime, ForeignKey
+    Column, Integer, String, Text, Date, DateTime, ForeignKey, Boolean
 )
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
@@ -86,16 +86,19 @@ class Module(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
+    name = Column(String, nullable=False)
     description = Column(Text)
     part_number = Column(String)
     serial_number = Column(String)
-    warranty_from = Column(Date)
+    hw_revision = Column(String)
+    under_warranty = Column(Boolean, default=False)
     warranty_expiry = Column(Date)
     environment_status = Column(String)
     last_updated = Column(DateTime, default=datetime.utcnow)
 
     device = relationship("Device", back_populates="modules")
     interfaces = relationship("Interface", back_populates="sfp_module")
+
 
 
 # -------------------------

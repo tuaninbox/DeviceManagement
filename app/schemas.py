@@ -21,14 +21,18 @@ class SoftwareInfoBase(BaseModel):
     firmware_version: Optional[str]
     last_updated: Optional[datetime]
 
+
 class ModuleBase(BaseModel):
+    name: Optional[str]
     description: Optional[str]
     part_number: Optional[str]
     serial_number: Optional[str]
-    warranty_from: Optional[date]
+    hw_revision: Optional[str]
+    under_warranty: Optional[bool] = False
     warranty_expiry: Optional[date]
     environment_status: Optional[str]
     last_updated: Optional[datetime]
+
 
 class InterfaceBase(BaseModel):
     name: str

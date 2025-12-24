@@ -1,5 +1,9 @@
 from sqlalchemy.orm import Session
 from . import models, schemas
+from core.logging_manager import setup_loggers
+
+# Initialize loggers for this CRUD module
+success_logger, fail_logger = setup_loggers(logger_name="app_crud")
 
 def get_device(db: Session, device_id: int):
     return db.query(models.Device).filter(models.Device.id == device_id).first()
@@ -64,34 +68,6 @@ def upsert_interfaces(db: Session, device_id: int, interfaces: list):
     except Exception as e:
         db.rollback()
         print(f"[ERROR] Failed to upsert interfaces for device {device_id}: {e}")
-        raise
-
-
-def upsert_modules(db: Session, device_id: int, modules: list):
-    try:
-        # Delete old modules
-        db.query(models.Module).filter(
-            models.Module.device_id == device_id
-        ).delete()
-
-        # Insert new modules
-        for mod in modules:
-            db_mod = models.Module(
-                device_id=device_id,
-                description=mod.get("description"),
-                part_number=mod.get("part_number"),
-                serial_number=mod.get("serial_number"),
-                warranty_from=mod.get("warranty_from"),
-                warranty_expiry=mod.get("warranty_expiry"),
-                environment_status=mod.get("environment_status"),
-            )
-            db.add(db_mod)
-
-        db.commit()
-
-    except Exception as e:
-        db.rollback()
-        print(f"[ERROR] Failed to upsert modules for device {device_id}: {e}")
         raise
 
 
@@ -238,3 +214,59 @@ def get_or_create_software_version(db: Session, os_version: str):
     db.commit()
     db.refresh(version)
     return version
+
+
+def create_module(db: Session, module: schemas.ModuleBase):
+    db_module = models.Module(
+        name=module.name,
+        description=module.description,
+        part_number=module.part_number,
+        serial_number=module.serial_number,
+        hw_revision=module.hw_revision,
+        under_warranty=module.under_warranty,
+        warranty_expiry=module.warranty_expiry,
+        environment_status=module.environment_status,
+        last_updated=module.last_updated,
+    )
+    db.add(db_module)
+    db.commit()
+    db.refresh(db_module)
+    return db_module
+
+def get_modules(db: Session):
+    return db.query(models.Module).all()
+
+def upsert_modules(db: Session, device_id: int, modules: list[dict]):
+    try:
+        # Delete old modules for this device
+        db.query(models.Module).filter(
+            models.Module.device_id == device_id
+        ).delete()
+
+        # Insert new modules
+        for mod in modules:
+            db_mod = models.Module(
+                device_id=device_id,
+                name=mod.get("name"),
+                description=mod.get("description"),
+                part_number=mod.get("part_number"),
+                serial_number=mod.get("serial_number"),
+                hw_revision=mod.get("hw_revision"),
+                under_warranty=mod.get("under_warranty", False),
+                warranty_expiry=mod.get("warranty_expiry"),
+                environment_status=mod.get("environment_status"),
+                last_updated=mod.get("last_updated"),
+            )
+            db.add(db_mod)
+
+        db.commit()
+        success_logger.info(f"Upserted {len(modules)} modules for device {device_id}")
+
+    except Exception as e:
+        db.rollback()
+        fail_logger.error(
+            f"Failed to upsert modules for device {device_id}: {e}",
+            exc_info=True
+        )
+        raise
+
