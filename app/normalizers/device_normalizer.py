@@ -55,18 +55,30 @@ def normalize_device(raw: dict) -> dict:
 # ------------------------------------------------------------
 # ✅ Normalize Interfaces (raw → Interface table)
 # ------------------------------------------------------------
-def normalize_interfaces(raw: dict) -> list:
+def normalize_interfaces(raw: dict) -> list[dict]:
     interfaces = raw.get("interfaces", [])
+    if not isinstance(interfaces, list):
+        # If it's a dict with error info, bail out gracefully
+        return []
 
     normalized = []
     for iface in interfaces:
+        if not isinstance(iface, dict):
+            continue
         normalized.append({
-            "name": iface["name"],
+            "name": iface.get("name"),
             "status": iface.get("status"),
-            "description": None,
-            "vrf": None,
+            "line_protocol": iface.get("line_protocol"),
+            "description": iface.get("description"),
+            "mac_address": iface.get("mac_address"),
+            "mtu": iface.get("mtu"),
+            "speed": iface.get("speed"),
+            "duplex": iface.get("duplex"),
+            "type": iface.get("type"),
+            "ip_address": iface.get("ip_address"),
+            "subnet_mask": iface.get("subnet_mask"),
+            "vrf": iface.get("vrf"),
         })
-
     return normalized
 
 

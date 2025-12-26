@@ -11,8 +11,8 @@ import csv
 import json
 import datetime
 
-from core.credentials import get_credentials
-from core.executor import run_parallel
+from credentials import get_credentials
+from executor import run_parallel
 
 
 # ------------------------------------------------------------

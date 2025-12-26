@@ -1,5 +1,9 @@
 from .session import DeviceSession
 import sys, traceback
+from core.logging_manager import setup_loggers
+
+success_logger, fail_logger = setup_loggers(logger_name="normalize_interfaces")
+
 class DeviceInventoryCollector(DeviceSession):
     def get_host_info(self):
         try:
@@ -165,39 +169,44 @@ class DeviceInventoryCollector(DeviceSession):
         interfaces = []
 
         if not isinstance(parsed, dict):
+            fail_logger.error( f"Interface output for device {getattr(self, 'hostname', 'unknown')} " 
+                              f"is not a dict: {type(parsed)}" )
             return interfaces
 
         for name, data in parsed.items():
             if data.get("is_deleted", False):
                 continue
+            try:
+                iface = {
+                    "name": name,
+                    "status": data.get("oper_status"),
+                    "line_protocol": data.get("line_protocol"),
+                    "description": data.get("description"),
+                    "mac_address": data.get("mac_address"),
+                    "mtu": data.get("mtu"),
+                    "speed": data.get("speed"),
+                    "duplex": data.get("duplex"),
+                    "type": data.get("type"),
+                    "auto_mdix": data.get("auto_mdix"),
+                    "negotiation": data.get("negotiation"),
+                    "ip_address": None,
+                    "subnet_mask": None,
+                    "vrf": vrf_map.get(name),
+                }
 
-            iface = {
-                "name": name,
-                "status": data.get("oper_status"),
-                "line_protocol": data.get("line_protocol"),
-                "description": data.get("description"),
-                "mac_address": data.get("mac_address"),
-                "mtu": data.get("mtu"),
-                "speed": data.get("speed"),
-                "duplex": data.get("duplex"),
-                "type": data.get("type"),
-                "auto_mdix": data.get("auto_mdix"),
-                "negotiation": data.get("negotiation"),
-                "ip_address": None,
-                "subnet_mask": None,
-                "vrf": vrf_map.get(name),
-            }
+                # IPv4 block
+                ipv4 = data.get("ipv4")
+                if isinstance(ipv4, dict):
+                    for ip, ipinfo in ipv4.items():
+                        iface["ip_address"] = ip
+                        iface["subnet_mask"] = ipinfo.get("prefix_length")
+                        break
 
-            # IPv4 block
-            ipv4 = data.get("ipv4")
-            if isinstance(ipv4, dict):
-                for ip, ipinfo in ipv4.items():
-                    iface["ip_address"] = ip
-                    iface["subnet_mask"] = ipinfo.get("prefix_length")
-                    break
-
-            interfaces.append(iface)
-
+                interfaces.append(iface)
+            except Exception as e: 
+                fail_logger.error( f"Failed to parse interface {name} for device {getattr(self, 'hostname', 'unknown')}: {e}", exc_info=True )
+            
+            success_logger.info( f"Parsed {len(interfaces)} interfaces for device {getattr(self, 'hostname', 'unknown')}" )
         return interfaces
 
     

@@ -1,4 +1,4 @@
-from core.eox import CiscoEoxClient
+from core.third_party.cisco_eox import CiscoEoxClient
 from core.credentials import get_cisco_eox_credentials
 
 def get_eox_data_from_sn(serials: list[str]) -> dict[str, dict]:
@@ -23,13 +23,21 @@ def get_eox_data_from_sn(serials: list[str]) -> dict[str, dict]:
         proxy_pass=creds.get("proxy_pass"),
     )
 
-    results: dict[str, dict] = {}
-    for sn in serials:
-        data = client.query_serial(sn)
-        results[sn] = data
-        # print(f"{sn}: {data}")
+    combined: list[dict] = []
 
-    return results
+    for sn in serials:
+        if sn:
+            try:
+                data = client.query_serial(sn)
+                # Each response has a 'serial_numbers' list, extend the combined list
+                if "serial_numbers" in data:
+                    combined.extend(data["serial_numbers"])
+            except Exception as e:
+                combined.append({"sr_no": sn, "error": str(e)})
+        else:
+            combined.append({"sr_no": None, "skipped": "empty serial number"})
+
+    return {"serial_numbers": combined}
 
 if __name__ == "__main__":
     serials = ["", ""]

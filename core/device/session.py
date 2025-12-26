@@ -15,14 +15,17 @@ import configparser
 from pathlib import Path
 
 class DeviceSession:
-    def __init__(self, hostname, host, os, user, password, cmdlist, port: int=22, success_logger=None, fail_logger=None, debug=0, outfolder="output", sanitizeconfig=True, removepassword: int = 1|2|4|8):
+    def __init__(self, hostname, host, os, user, password, cmdlist, port: int =22, success_logger=None, fail_logger=None, debug=0, outfolder="output", sanitizeconfig=True, removepassword: int = 1|2|4|8):
+        try: 
+            self.port = int(port) if str(port).strip() else 22 
+        except ValueError: 
+            self.port = 22 # fallback
         self.hostname = hostname
         self.host = host
         self.os = os
         self.user = user
         self.password = password
         self.cmdlist = cmdlist
-        self.port = port
         self.success_logger = success_logger
         self.fail_logger = fail_logger
         self.debug = debug
@@ -75,7 +78,7 @@ class DeviceSession:
                 if out_format == "json":
                     # Use Genie parser for structured data
                     raw_output = conn.send_command(cmd, use_genie=True)
-                    parsed_output = raw_output  # Genie already returns structured dict
+                    parsed_output = raw_output if isinstance(raw_output, dict) else {}
                     sanitized_output = sanitizer.apply(parsed_output, removepassword)
                     output_lines[cmd] = sanitized_output
                 else:

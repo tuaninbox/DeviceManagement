@@ -4,7 +4,7 @@ from typing import List
 from sqlalchemy import func
 
 from app import models, schemas, crud, database
-from load_inventory import collect_inventory
+from core.load_inventory import collect_inventory
 from app.normalizers.device_normalizer import (
     normalize_device,
     normalize_interfaces,
