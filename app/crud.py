@@ -44,22 +44,36 @@ def upsert_device(db: Session, device_data: dict):
     db.refresh(db_device)
     return db_device
 
-
 def upsert_interfaces(db: Session, device_id: int, interfaces: list):
     try:
-        # Delete old interfaces
         db.query(models.Interface).filter(
             models.Interface.device_id == device_id
         ).delete()
 
-        # Insert new interfaces
         for iface in interfaces:
             db_iface = models.Interface(
                 device_id=device_id,
-                name=iface["name"],
+                name=iface.get("name"),
+                type=iface.get("type"),
                 status=iface.get("status"),
+                line_protocol=iface.get("line_protocol"),
                 description=iface.get("description"),
+                mac_address=iface.get("mac_address"),
+                mtu=iface.get("mtu"),
+                speed=iface.get("speed"),
+                duplex=iface.get("duplex"),
+                auto_mdix=iface.get("auto_mdix"),
+                media_type=iface.get("media_type"),
+                auto_negotiate=iface.get("auto_negotiate"),
+                ip_address=iface.get("ip_address"),
+                prefix_length=iface.get("prefix_length"),
                 vrf=iface.get("vrf"),
+                sfp_module_id=iface.get("sfp_module_id"),
+                last_updated=iface.get("last_updated"),
+                link_down_reason=iface.get("link_down_reason"),
+                port_mode=iface.get("port_mode"),
+                fec_mode=iface.get("fec_mode"),
+                last_link_flapped=iface.get("last_link_flapped"),
             )
             db.add(db_iface)
 

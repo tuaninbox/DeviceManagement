@@ -126,7 +126,7 @@ class DeviceInventoryCollector(DeviceSession):
             # Build VRF map
             # -----------------------------
             vrf_map = self._parse_vrf_map(output.get(cmd_vrf, {}))
-
+            print(f"vrf map: {vrf_map}")
             # -----------------------------
             # Parse interface details
             # -----------------------------
@@ -151,17 +151,36 @@ class DeviceInventoryCollector(DeviceSession):
     def _parse_vrf_map(self, vrf_output):
         vrf_map = {}
 
-        if self.os.lower() in ["ios", "iosxe"]:
-            # Genie structure: vrf -> interfaces list
-            for vrf_name, data in vrf_output.items():
+        if not isinstance(vrf_output, dict):
+            return vrf_map
+
+        os_type = self.os.lower()
+
+        # -----------------------------
+        # IOS / IOS-XE
+        # -----------------------------
+        if os_type in ["ios", "iosxe"]:
+            # Expecting structure: {"vrf": { vrf_name: { "interfaces": [...] }}}
+            vrf_data = vrf_output.get("vrf", {})
+
+            for vrf_name, data in vrf_data.items():
                 interfaces = data.get("interfaces", [])
                 for intf in interfaces:
                     vrf_map[intf] = vrf_name
 
-        elif self.os.lower() == "nxos":
-            # Genie structure: dict of interfaces
-            for intf, data in vrf_output.items():
-                vrf_map[intf] = data.get("vrf", "default")
+        # -----------------------------
+        # NX-OS
+        # -----------------------------
+        elif os_type == "nxos":
+            # Expecting structure: {"vrf_interface": { intf: { "vrf_name": ... }}}
+            vrf_data = vrf_output.get("vrf_interface", {})
+
+            for intf, data in vrf_data.items():
+                vrf_name = data.get("vrf_name", "default")
+                vrf_map[intf] = vrf_name
+
+        return vrf_map
+
 
         return vrf_map
 
@@ -179,18 +198,23 @@ class DeviceInventoryCollector(DeviceSession):
             try:
                 iface = {
                     "name": name,
-                    "status": data.get("oper_status"),
-                    "line_protocol": data.get("line_protocol"),
+                    "status": data.get("oper_status") if data.get("enabled") else "administratively down",
+                    "line_protocol": data.get("line_protocol") or data.get("link_state"),
+                    "link_down_reason": data.get("link_down_reason"),
+                    "port_mode": data.get("port_mode"),
                     "description": data.get("description"),
-                    "mac_address": data.get("mac_address"),
+                    "mac_address": data.get("phys_address") or data.get("mac_address"),
                     "mtu": data.get("mtu"),
-                    "speed": data.get("speed"),
-                    "duplex": data.get("duplex"),
-                    "type": data.get("type"),
-                    "auto_mdix": data.get("auto_mdix"),
-                    "negotiation": data.get("negotiation"),
+                    "speed": f"{data.get('port_speed')}{data.get('port_speed_unit') or ''}",
+                    "duplex": data.get("duplex_mode"),
+                    "type": data.get("type") or data.get("types"),
+                    "fec_mode": data.get("fec_mode"),
+                    "media_type": data.get("media_type"),
+                    "auto_mdix": data.get("auto_mdix") or data.get("link_type"),
+                    "auto_negotiate": data.get("auto_negotiate"),
                     "ip_address": None,
-                    "subnet_mask": None,
+                    "prefix_length": None,
+                    "last_link_flapped": data.get("last_link_flapped"),
                     "vrf": vrf_map.get(name),
                 }
 
@@ -198,8 +222,8 @@ class DeviceInventoryCollector(DeviceSession):
                 ipv4 = data.get("ipv4")
                 if isinstance(ipv4, dict):
                     for ip, ipinfo in ipv4.items():
-                        iface["ip_address"] = ip
-                        iface["subnet_mask"] = ipinfo.get("prefix_length")
+                        iface["ip_address"] = ipinfo["ip"]
+                        iface["prefix_length"] = ipinfo["prefix_length"]
                         break
 
                 interfaces.append(iface)

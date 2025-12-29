@@ -23,7 +23,7 @@ class Device(Base):
     uptime = Column(Integer)
     model = Column(String)
     serial_number = Column(String)
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.now)
 
     # Relationships
     software_info = relationship("SoftwareInfo", back_populates="device", uselist=False)
@@ -56,7 +56,7 @@ class SoftwareVersion(Base):
     category = Column(String)    # e.g., "Network OS", "Switch OS", "Router OS"
 
     vulnerability = Column(Text)  # JSON or text describing CVEs
-    last_scanned = Column(DateTime, default=datetime.utcnow)
+    last_scanned = Column(DateTime, default=datetime.now)
 
     devices = relationship("SoftwareInfo", back_populates="version")
 
@@ -72,7 +72,7 @@ class SoftwareInfo(Base):
     device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
     version_id = Column(Integer, ForeignKey("software_versions.id"))
     firmware_version = Column(String)
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.now)
     device = relationship("Device", back_populates="software_info")
     version = relationship("SoftwareVersion", back_populates="devices")
 
@@ -94,12 +94,10 @@ class Module(Base):
     under_warranty = Column(Boolean, default=False)
     warranty_expiry = Column(Date)
     environment_status = Column(String)
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.now)
 
     device = relationship("Device", back_populates="modules")
     interfaces = relationship("Interface", back_populates="sfp_module")
-
-
 
 # -------------------------
 # Interfaces
@@ -109,43 +107,31 @@ class Interface(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
+
     name = Column(String, nullable=True)
-    type = Column(String)                # new
+    type = Column(String)
     status = Column(String)
-    line_protocol = Column(String)       # new
+    line_protocol = Column(String)
     description = Column(Text)
-    mac_address = Column(String)         # new
-    mtu = Column(Integer)                # new
-    speed = Column(String)               # new
-    duplex = Column(String)              # new
-    link_type = Column(String)           # new
-    media_type = Column(String)          # new
-    auto_negotiate = Column(String)      # new
-    ip_address = Column(String)          # new
-    subnet_mask = Column(String)         # new
+    mac_address = Column(String)
+    mtu = Column(Integer)
+    speed = Column(String)
+    duplex = Column(String)
+    auto_mdix = Column(String)
+    media_type = Column(String)
+    auto_negotiate = Column(Boolean)
+    ip_address = Column(String)
+    prefix_length = Column(String)
     vrf = Column(String)
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    link_down_reason = Column(String)
+    port_mode = Column(String)
+    fec_mode = Column(String)
+    last_link_flapped = Column(String)
+    last_updated = Column(DateTime, default=datetime.now)
     sfp_module_id = Column(Integer, ForeignKey("modules.id", ondelete="SET NULL"))
 
     device = relationship("Device", back_populates="interfaces")
     sfp_module = relationship("Module", back_populates="interfaces")
-
-
-
-# class Interface(Base):
-#     __tablename__ = "interfaces"
-
-#     id = Column(Integer, primary_key=True, index=True)
-#     device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
-#     name = Column(String, nullable=False)
-#     status = Column(String)
-#     description = Column(Text)
-#     vrf = Column(String)
-#     last_updated = Column(DateTime, default=datetime.utcnow)
-#     sfp_module_id = Column(Integer, ForeignKey("modules.id", ondelete="SET NULL"))
-
-#     device = relationship("Device", back_populates="interfaces")
-#     sfp_module = relationship("Module", back_populates="interfaces")
 
 
 # -------------------------
@@ -161,10 +147,9 @@ class RunningConfig(Base):
     file_path = Column(String, nullable=False)
 
     updated_by = Column(String)
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.now)
 
     device = relationship("Device", back_populates="running_configs")
-
 
 
 # -------------------------
@@ -178,7 +163,7 @@ class RoutingTable(Base):
     vrf = Column(String, default="default")
     route = Column(String, nullable=False)
     next_hop = Column(String)
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.now)
 
     device = relationship("Device", back_populates="routing_table")
 
@@ -194,7 +179,7 @@ class MacAddressTable(Base):
     vrf = Column(String, default="default")
     mac_address = Column(String, nullable=False)
     interface_name = Column(String)
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.now)
 
     device = relationship("Device", back_populates="mac_address_table")
 
@@ -210,6 +195,6 @@ class VLAN(Base):
     vlan_id = Column(Integer, nullable=False)
     name = Column(String)
     membership = Column(Text)
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.now)
 
     device = relationship("Device", back_populates="vlans")

@@ -21,7 +21,6 @@ class SoftwareInfoBase(BaseModel):
     firmware_version: Optional[str]
     last_updated: Optional[datetime]
 
-
 class ModuleBase(BaseModel):
     name: Optional[str]
     description: Optional[str]
@@ -43,23 +42,20 @@ class InterfaceBase(BaseModel):
     mtu: Optional[int] = None
     speed: Optional[str] = None
     duplex: Optional[str] = None
-    link_type: Optional[str] = None
+    auto_mdix: Optional[str] = None
     media_type: Optional[str] = None
-    auto_negotiate: Optional[str] = None
+    auto_negotiate: Optional[bool] = None
     ip_address: Optional[str] = None
-    subnet_mask: Optional[str] = None
+    prefix_length: Optional[str] = None
     vrf: Optional[str] = None
+    link_down_reason: Optional[str] = None
+    port_mode: Optional[str] = None
+    fec_mode: Optional[str] = None
+    last_link_flapped: Optional[str] = None
+
     last_updated: Optional[datetime] = None
     sfp_module_id: Optional[int] = None
 
-
-# class InterfaceBase(BaseModel):
-#     name: str
-#     status: Optional[str]
-#     description: Optional[str]
-#     vrf: Optional[str]
-#     last_updated: Optional[datetime]
-#     sfp_module_id: Optional[int]
 
 class RunningConfigBase(BaseModel):
     config: Optional[str]

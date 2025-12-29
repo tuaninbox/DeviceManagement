@@ -39,7 +39,6 @@ def parse_uptime(uptime_str: str) -> int:
 # ------------------------------------------------------------
 def normalize_device(raw: dict) -> dict:
     host = raw["host_info"]
-
     return {
         "hostname": host["hostname"],
         "mgmt_address": host["ip"],
@@ -68,21 +67,27 @@ def normalize_interfaces(raw: dict) -> list[dict]:
         normalized.append({
             "name": iface.get("name"),
             "type": iface.get("type"),
-            "status": iface.get("oper_status"),
+            "status": iface.get("status"),
             "line_protocol": iface.get("line_protocol"),
             "description": iface.get("description"),
-            "mac_address": iface.get("phys_address"),
+            "mac_address": iface.get("mac_address"),
             "mtu": iface.get("mtu"),
-            "speed": iface.get("port_speed"),
-            "duplex": iface.get("duplex_mode"),
-            "link_type": iface.get("link_type"),
+            "speed": iface.get("speed"),
+            "duplex": iface.get("duplex"),
+            "auto_mdix": iface.get("auto_mdix"),
             "media_type": iface.get("media_type"),
             "auto_negotiate": iface.get("auto_negotiate"),
             "ip_address": iface.get("ip_address"),
-            "subnet_mask": iface.get("subnet_mask"),
+            "prefix_length": iface.get("prefix_length"),
             "vrf": iface.get("vrf"),
+            "last_updated": datetime.now(),
+            "link_down_reason": iface.get("link_down_reason"),
+            "port_mode": iface.get("port_mode"),
+            "fec_mode": iface.get("fec_mode"),
+            "last_link_flapped": iface.get("last_link_flapped"),
         })
     return normalized
+
 
 
 # ------------------------------------------------------------
@@ -131,11 +136,11 @@ def normalize_modules(raw: dict) -> list[dict]:
                 "description": v.get("descr") or v.get("description"),
                 "part_number": v.get("pid") or v.get("part_number"),
                 "serial_number": v.get("sn") or v.get("serial_number"),
-                "hw_revision": v.get("hw_rev") or v.get("vid") or v.get("hardware_revision"),
+                "hw_revision": v.get("hw_revision") or v.get("vid") or v.get("hardware_revision"),
                 "under_warranty": v.get("under_warranty", False),
                 "warranty_expiry": v.get("warranty_expiry"),
                 "environment_status": v.get("environment_status"),
-                "last_updated": datetime.utcnow(),
+                "last_updated": datetime.now(),
             }
             modules.append(module)
         except Exception as e:
