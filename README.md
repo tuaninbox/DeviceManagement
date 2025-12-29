@@ -173,3 +173,16 @@ query {
   }
 }
 ```
+
+
+# Alembic 
+- alembic init alembic
+- alembic revision --autogenerate -m "Initial schema with interfaces fields"
+- alembic upgrade head
+- alembic stamp head
+
+
+# SQLite
+sqlite3 devices.db
+sqlite> .schema interfaces
+

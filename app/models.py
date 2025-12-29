@@ -109,15 +109,43 @@ class Interface(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=True)
+    type = Column(String)                # new
     status = Column(String)
+    line_protocol = Column(String)       # new
     description = Column(Text)
+    mac_address = Column(String)         # new
+    mtu = Column(Integer)                # new
+    speed = Column(String)               # new
+    duplex = Column(String)              # new
+    link_type = Column(String)           # new
+    media_type = Column(String)          # new
+    auto_negotiate = Column(String)      # new
+    ip_address = Column(String)          # new
+    subnet_mask = Column(String)         # new
     vrf = Column(String)
     last_updated = Column(DateTime, default=datetime.utcnow)
     sfp_module_id = Column(Integer, ForeignKey("modules.id", ondelete="SET NULL"))
 
     device = relationship("Device", back_populates="interfaces")
     sfp_module = relationship("Module", back_populates="interfaces")
+
+
+
+# class Interface(Base):
+#     __tablename__ = "interfaces"
+
+#     id = Column(Integer, primary_key=True, index=True)
+#     device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
+#     name = Column(String, nullable=False)
+#     status = Column(String)
+#     description = Column(Text)
+#     vrf = Column(String)
+#     last_updated = Column(DateTime, default=datetime.utcnow)
+#     sfp_module_id = Column(Integer, ForeignKey("modules.id", ondelete="SET NULL"))
+
+#     device = relationship("Device", back_populates="interfaces")
+#     sfp_module = relationship("Module", back_populates="interfaces")
 
 
 # -------------------------

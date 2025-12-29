@@ -33,14 +33,33 @@ class ModuleBase(BaseModel):
     environment_status: Optional[str]
     last_updated: Optional[datetime]
 
-
 class InterfaceBase(BaseModel):
     name: str
-    status: Optional[str]
-    description: Optional[str]
-    vrf: Optional[str]
-    last_updated: Optional[datetime]
-    sfp_module_id: Optional[int]
+    type: Optional[str] = None
+    status: Optional[str] = None
+    line_protocol: Optional[str] = None
+    description: Optional[str] = None
+    mac_address: Optional[str] = None
+    mtu: Optional[int] = None
+    speed: Optional[str] = None
+    duplex: Optional[str] = None
+    link_type: Optional[str] = None
+    media_type: Optional[str] = None
+    auto_negotiate: Optional[str] = None
+    ip_address: Optional[str] = None
+    subnet_mask: Optional[str] = None
+    vrf: Optional[str] = None
+    last_updated: Optional[datetime] = None
+    sfp_module_id: Optional[int] = None
+
+
+# class InterfaceBase(BaseModel):
+#     name: str
+#     status: Optional[str]
+#     description: Optional[str]
+#     vrf: Optional[str]
+#     last_updated: Optional[datetime]
+#     sfp_module_id: Optional[int]
 
 class RunningConfigBase(BaseModel):
     config: Optional[str]
