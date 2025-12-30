@@ -83,6 +83,10 @@ def sync_devices(db: Session = Depends(get_db)):
             crud.upsert_modules(db, db_dev.id, module_list)
             success_logger.info(f"Upserted {len(module_list)} modules for {hostname}")
 
+            # LINK INTERFACES TO MODULES
+            crud.link_interfaces_to_modules(db, db_dev.id, iface_list, module_list)
+            success_logger.info(f"Linked interfaces to modules for {hostname}")
+
             # SOFTWARE INFO
             sw = normalize_software_info(raw)
             crud.upsert_software_info(db, db_dev.id, sw)

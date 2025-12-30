@@ -284,3 +284,31 @@ def upsert_modules(db: Session, device_id: int, modules: list[dict]):
         )
         raise
 
+
+def link_interfaces_to_modules(db: Session, device_id: int, iface_list: list, module_list: list):
+    """
+    Link Interface rows to Module rows by matching names or slot/transceiver strings.
+    """
+    for iface in iface_list:
+        iface_name = iface.get("name")
+        slot_trans = None
+        if iface_name and "Ethernet" in iface_name:
+            slot_trans = iface_name.split("Ethernet")[-1]  # e.g. "0/0/1"
+
+        # Try to find a matching module
+        match = None
+        for m in module_list:
+            m_name = m.get("name")
+            if not m_name:
+                continue
+            if m_name == iface_name or (slot_trans and m_name == slot_trans):
+                match = db.query(Module).filter_by(device_id=device_id, name=m_name).first()
+                break
+
+        if match:
+            iface_obj = db.query(Interface).filter_by(device_id=device_id, name=iface_name).first()
+            if iface_obj:
+                iface_obj.sfp_module_id = match.id
+                db.add(iface_obj)
+
+    db.commit()

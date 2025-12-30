@@ -234,12 +234,97 @@ class DeviceInventoryCollector(DeviceSession):
         return interfaces
 
     
+    # def get_modules_no_sfp_nxos(self):
+    #     try:
+    #         os_cmds = {
+    #             "ios": ["show inventory"],
+    #             "iosxe": ["show inventory"],
+    #             "nxos": ["show inventory"],   # use show inventory for consistency
+    #             "aironet": ["show inventory"],
+    #             "dellos10": ["show inventory"],
+    #             "f5": ["show sys hardware"],
+    #         }
+
+    #         commands = os_cmds.get(self.os.lower())
+    #         if not commands:
+    #             raise ValueError(f"Unsupported OS type: {self.os}")
+
+    #         original_cmdlist = self.cmdlist
+    #         self.cmdlist = commands
+    #         result = self._run_session(out_format="json")
+    #         self.cmdlist = original_cmdlist
+
+    #         modules = []
+    #         cmd = commands[0]
+
+    #         if not result.get("success"):
+    #             return modules
+
+    #         parsed = result["output"].get(cmd, {})
+
+    #         def walk_inventory(inv):
+    #             if not isinstance(inv, dict):
+    #                 return
+
+    #             for k, v in inv.items():
+    #                 if isinstance(v, dict):
+    #                     # Leaf entry: has inventory fields
+    #                     if any(field in v for field in (
+    #                         "pid", "product_id", "descr", "description",
+    #                         "sn", "serial_number", "vid", "hw_rev", "hardware_revision"
+    #                     )):
+    #                         entry_name = (
+    #                             v.get("name")           # Genie often provides a proper name here
+    #                             or k                    # fallback to dict key
+    #                             or v.get("pid")         # fallback to PID
+    #                             or v.get("product_id")  # fallback to product_id
+    #                             or "unknown"            # last resort
+    #                         )
+    #                         modules.append({
+    #                             "name": entry_name.strip(),
+    #                             "description": v.get("descr") or v.get("description"),
+    #                             "pid": v.get("pid") or v.get("product_id"),
+    #                             "part_number": v.get("pid") or v.get("part_number"),
+    #                             "serial_number": v.get("sn") or v.get("serial_number"),
+    #                             "hw_revision": v.get("hw_revision") or v.get("vid") or v.get("hardware_revision"),
+    #                             # "type": self._classify_module_type(entry_name, v.get("descr") or v.get("description")),
+    #                             # "model": v.get("pid") or v.get("product_id"),
+    #                         })
+    #                     else:
+    #                         # Not a leaf, recurse deeper
+    #                         walk_inventory(v)
+
+    #         if isinstance(parsed, dict):
+    #             walk_inventory(parsed)
+    #         else:
+    #             raw = result["output"].get(cmd)
+    #             if isinstance(raw, str):
+    #                 if self.os.lower() == "nxos":
+    #                     modules.extend(self._fallback_parse_nxos_hardware(raw))
+    #                 elif self.os.lower() in ["ios","iosxe","aironet","dellos10"]:
+    #                     modules.extend(self._fallback_parse_inventory(raw))
+    #                 elif self.os.lower() == "f5":
+    #                     modules.extend(self._fallback_parse_f5_hardware(raw))
+
+    #         return modules
+
+    #     except Exception as e:
+    #         tb = traceback.extract_tb(sys.exc_info()[2])[0]
+    #         self.result["success"] = False
+    #         self.result["error"] = {
+    #             "message": str(e),
+    #             "filename": tb.filename,
+    #             "line": tb.lineno,
+    #             "code": tb.line
+    #         }
+    #         return self.result
+
     def get_modules(self):
         try:
             os_cmds = {
                 "ios": ["show inventory"],
                 "iosxe": ["show inventory"],
-                "nxos": ["show inventory"],   # use show inventory for consistency
+                "nxos": ["show inventory", "show interface transceiver"],
                 "aironet": ["show inventory"],
                 "dellos10": ["show inventory"],
                 "f5": ["show sys hardware"],
@@ -255,30 +340,26 @@ class DeviceInventoryCollector(DeviceSession):
             self.cmdlist = original_cmdlist
 
             modules = []
-            cmd = commands[0]
-
             if not result.get("success"):
                 return modules
 
-            parsed = result["output"].get(cmd, {})
+            # -----------------------------
+            # Parse inventory output (first command)
+            # -----------------------------
+            inv_cmd = commands[0]
+            parsed = result["output"].get(inv_cmd, {})
 
             def walk_inventory(inv):
                 if not isinstance(inv, dict):
                     return
-
                 for k, v in inv.items():
                     if isinstance(v, dict):
-                        # Leaf entry: has inventory fields
                         if any(field in v for field in (
                             "pid", "product_id", "descr", "description",
                             "sn", "serial_number", "vid", "hw_rev", "hardware_revision"
                         )):
                             entry_name = (
-                                v.get("name")           # Genie often provides a proper name here
-                                or k                    # fallback to dict key
-                                or v.get("pid")         # fallback to PID
-                                or v.get("product_id")  # fallback to product_id
-                                or "unknown"            # last resort
+                                v.get("name") or k or v.get("pid") or v.get("product_id") or "unknown"
                             )
                             modules.append({
                                 "name": entry_name.strip(),
@@ -287,17 +368,14 @@ class DeviceInventoryCollector(DeviceSession):
                                 "part_number": v.get("pid") or v.get("part_number"),
                                 "serial_number": v.get("sn") or v.get("serial_number"),
                                 "hw_revision": v.get("hw_revision") or v.get("vid") or v.get("hardware_revision"),
-                                # "type": self._classify_module_type(entry_name, v.get("descr") or v.get("description")),
-                                # "model": v.get("pid") or v.get("product_id"),
                             })
                         else:
-                            # Not a leaf, recurse deeper
                             walk_inventory(v)
 
             if isinstance(parsed, dict):
                 walk_inventory(parsed)
             else:
-                raw = result["output"].get(cmd)
+                raw = result["output"].get(inv_cmd)
                 if isinstance(raw, str):
                     if self.os.lower() == "nxos":
                         modules.extend(self._fallback_parse_nxos_hardware(raw))
@@ -305,6 +383,48 @@ class DeviceInventoryCollector(DeviceSession):
                         modules.extend(self._fallback_parse_inventory(raw))
                     elif self.os.lower() == "f5":
                         modules.extend(self._fallback_parse_f5_hardware(raw))
+
+            # -----------------------------
+            # Parse NXOS transceiver output (second command)
+            # -----------------------------
+            if self.os.lower() == "nxos" and len(commands) > 1:
+                trans_cmd = commands[1]
+                trans_output = result["output"].get(trans_cmd, {})
+
+                if isinstance(trans_output, dict):
+                    for intf, details in trans_output.items():
+                        # Only create module entry when transceiver_present is True
+                        if not details.get("transceiver_present"):
+                            continue
+
+                        modules.append({
+                            "name": f"SFP-{intf}",
+                            "description": details.get("transceiver_type") or details.get("type"),
+                            "pid": details.get("part_number") or details.get("cis_product_id"),
+                            "serial_number": details.get("serial_number"),
+                            "hw_revision": details.get("revision"),
+                            "interface": intf,
+                        })
+
+
+            # -----------------------------
+            # Map IOS/IOSXE module names to interfaces
+            # -----------------------------
+            if self.os.lower() in ["iosxe", "ios"]:
+                for m in modules:
+                    name = m.get("name", "")
+                    if name.startswith("subslot"):
+                        # Router style: "subslot 0/0 transceiver 1"
+                        parts = name.split()
+                        if len(parts) >= 4 and parts[2] == "transceiver":
+                            slot = parts[1]        # "0/0"
+                            trans_num = parts[3]   # "1"
+                            # Build full interface name. Choose GigabitEthernet by default,
+                            # but you can adjust if your inventory indicates FastEthernet.
+                            m["interface"] = f"{slot}/{trans_num}"
+                    elif any(prefix in name for prefix in ["GigabitEthernet", "FastEthernet", "TenGigabitEthernet"]):
+                        # Switch style: module name already matches interface name
+                        m["interface"] = name
 
             return modules
 
@@ -441,5 +561,29 @@ class DeviceInventoryCollector(DeviceSession):
             return self.result
 
 
-if __name__=="__main__":
-    pass
+if __name__ == "__main__":
+    import argparse
+    from pprint import pprint
+
+    parser = argparse.ArgumentParser(description="Run get_modules for a device")
+    parser.add_argument("--host", required=True, help="Device hostname or IP")
+    parser.add_argument("--os", required=True, help="Device OS type (ios, iosxe, nxos, etc.)")
+    parser.add_argument("--username", required=True, help="Login username")
+    parser.add_argument("--password", required=True, help="Login password")
+    args = parser.parse_args()
+
+    # Initialize your collector
+    collector = DeviceInventoryCollector(
+        hostname=args.host,
+        host=args.host,
+        os=args.os,
+        username=args.username,
+        password=args.password,
+        cmdlist=[],
+    )
+
+    # Run get_modules
+    modules = collector.get_modules()
+
+    print(f"\nModules collected from {args.host} ({args.os}):")
+    pprint(modules)
