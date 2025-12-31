@@ -18,13 +18,15 @@ from executor import run_parallel
 # ------------------------------------------------------------
 # ✅ Reusable function: FastAPI will call THIS
 # ------------------------------------------------------------
-def collect_inventory(listfile: str = "inventory/devices.csv"):
+def collect_inventory(
+    listfile: str = "inventory/devices.csv",
+    hostnames: list[str] | None = None
+):
     """
-    Load inventory from CSV, run parallel collector, and return results.
-    This function is safe to import and call from FastAPI.
+    Load inventory from CSV, optionally filter by a list of hostnames,
+    run parallel collector, and return results.
     """
 
-    # Load credentials (your existing logic)
     username, password = get_credentials()
 
     # Load CSV inventory
@@ -32,14 +34,28 @@ def collect_inventory(listfile: str = "inventory/devices.csv"):
         with open(listfile, "rt") as srcfile:
             reader = csv.DictReader(srcfile)
             inventory_rows = list(reader)
-            # print(inventory_rows)
     except Exception as e:
         raise RuntimeError(f"{datetime.datetime.now()}: Failed to load inventory: {e}")
+
+    # Optional filtering by list of hostnames
+    if hostnames:
+        # Normalize hostnames (strip whitespace, lowercase)
+        normalized = {h.strip().lower() for h in hostnames}
+
+        filtered = [
+            row for row in inventory_rows
+            if row["hostname"].strip().lower() in normalized
+        ]
+
+        if not filtered:
+            raise ValueError(f"No matching hostnames found in inventory: {hostnames}")
+
+        inventory_rows = filtered
 
     # Commands list (empty for inventory mode)
     cmds = []
 
-    # Run your parallel executor
+    # Run parallel executor
     results = run_parallel(
         inventory_rows,
         cmds,
@@ -47,7 +63,7 @@ def collect_inventory(listfile: str = "inventory/devices.csv"):
         password,
         collector_type="inventory",
     )
-    # print(results)
+
     return results
 
 

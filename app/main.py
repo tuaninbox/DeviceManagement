@@ -12,7 +12,7 @@ from .graphql import schema
 # This runs once at startup.
 models.Base.metadata.create_all(bind=database.engine)
 
-app = FastAPI(title="Device Management Web App")
+app = FastAPI(title="Device Management Backend App")
 
 # Register endpoints with the app
 # REST routers

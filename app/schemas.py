@@ -196,3 +196,6 @@ class Device(DeviceBase):
 
     class Config:
         from_attributes = True
+
+class SyncRequest(BaseModel):
+    hostnames: Optional[List[str]] = None

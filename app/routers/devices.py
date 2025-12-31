@@ -9,9 +9,6 @@ from app.normalizers.device_normalizer import (
     normalize_device,
     normalize_interfaces,
     normalize_modules,
-    normalize_mac_table,
-    normalize_routing_table,
-    normalize_running_config,
     normalize_software_info,
 )
 from core.logging_manager import setup_loggers
@@ -59,56 +56,128 @@ def get_device_by_hostname(hostname: str, db: Session = Depends(get_db)):
 
     return device
 
+
+# POST ENDPOINTS
+# @router.post("/sync")
+# def sync_devices(db: Session = Depends(get_db)):
+#     success_logger.info("Starting device sync from inventory")
+#     raw_inventory = collect_inventory()
+#     updated_devices = []
+
+#     # Load folders from config
+#     cfg = load_device_management_config()
+#     config_folder = cfg["config_folder"]
+#     operational_folder = cfg["operational_folder"]
+
+#     for raw in raw_inventory:
+#         hostname = raw["host_info"]["hostname"]
+#         success_logger.info(f"Syncing device: {hostname}")
+
+#         try:
+#             # DEVICE METADATA
+#             device_data = normalize_device(raw)
+
+#             # Build file paths (no file writing, no Git)
+#             device_data["running_config_path"] = str(config_folder / hostname)
+#             device_data["routing_table_path"] = str(operational_folder / hostname)
+#             device_data["mac_table_path"] = str(operational_folder / hostname)
+
+#             # UPSERT DEVICE
+#             db_dev = crud.upsert_device(db, device_data)
+#             success_logger.info(f"Upserted device: {hostname}")
+
+#             # INTERFACES
+#             iface_list = normalize_interfaces(raw)
+#             crud.upsert_interfaces(db, db_dev.id, iface_list)
+#             success_logger.info(f"Upserted {len(iface_list)} interfaces for {hostname}")
+
+#             # MODULES
+#             module_list = normalize_modules(raw)
+#             crud.upsert_modules(db, db_dev.id, module_list)
+#             success_logger.info(f"Upserted {len(module_list)} modules for {hostname}")
+
+#             # SOFTWARE INFO
+#             sw = normalize_software_info(raw)
+#             crud.upsert_software_info(db, db_dev.id, sw)
+#             success_logger.info(f"Upserted software info for {hostname}")
+
+#             # No config, routing, or MAC collection anymore
+
+#             updated_devices.append(db_dev)
+
+#         except Exception as e:
+#             fail_logger.error(f"Failed to sync device {hostname}: {e}", exc_info=True)
+
+#     success_logger.info(f"Device sync completed. {len(updated_devices)} devices updated.")
+#     return updated_devices
+
 @router.post("/sync")
-def sync_devices(db: Session = Depends(get_db)):
-    success_logger.info("Starting device sync from inventory")
-    raw_inventory = collect_inventory()
-    updated_devices = []
+def sync_devices(request: schemas.SyncRequest, db: Session = Depends(get_db)):
+    hostnames = request.hostnames
+
+    # If hostnames missing or empty → sync ALL devices
+    if not hostnames:
+        hostnames = None
+
+    success_logger.info(f"Starting sync for devices: {hostnames or 'ALL'}")
 
     # Load folders from config
     cfg = load_device_management_config()
     config_folder = cfg["config_folder"]
     operational_folder = cfg["operational_folder"]
 
-    for raw in raw_inventory:
+    updated_devices = []
+    errors = []
+
+    try:
+        raw_list = collect_inventory(hostnames=hostnames)
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to collect inventory: {e}"
+        }
+
+    for raw in raw_list:
         hostname = raw["host_info"]["hostname"]
         success_logger.info(f"Syncing device: {hostname}")
 
         try:
             # DEVICE METADATA
             device_data = normalize_device(raw)
-
-            # Build file paths (no file writing, no Git)
             device_data["running_config_path"] = str(config_folder / hostname)
             device_data["routing_table_path"] = str(operational_folder / hostname)
             device_data["mac_table_path"] = str(operational_folder / hostname)
 
-            # UPSERT DEVICE
             db_dev = crud.upsert_device(db, device_data)
-            success_logger.info(f"Upserted device: {hostname}")
 
             # INTERFACES
             iface_list = normalize_interfaces(raw)
             crud.upsert_interfaces(db, db_dev.id, iface_list)
-            success_logger.info(f"Upserted {len(iface_list)} interfaces for {hostname}")
 
             # MODULES
             module_list = normalize_modules(raw)
             crud.upsert_modules(db, db_dev.id, module_list)
-            success_logger.info(f"Upserted {len(module_list)} modules for {hostname}")
 
-            # SOFTWARE INFO
+            # SOFTWARE
             sw = normalize_software_info(raw)
             crud.upsert_software_info(db, db_dev.id, sw)
-            success_logger.info(f"Upserted software info for {hostname}")
 
-            # No config, routing, or MAC collection anymore
-
-            updated_devices.append(db_dev)
+            updated_devices.append({
+                "hostname": hostname,
+                "device_id": db_dev.id,
+                "updated": {
+                    "device": True,
+                    "interfaces": len(iface_list),
+                    "modules": len(module_list),
+                    "software": True
+                }
+            })
 
         except Exception as e:
-            fail_logger.error(f"Failed to sync device {hostname}: {e}", exc_info=True)
+            errors.append({"hostname": hostname, "error": str(e)})
 
-    success_logger.info(f"Device sync completed. {len(updated_devices)} devices updated.")
-    return updated_devices
-
+    return {
+        "success": len(errors) == 0,
+        "updated_devices": updated_devices,
+        "errors": errors
+    }
