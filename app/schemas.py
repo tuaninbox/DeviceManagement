@@ -1,4 +1,3 @@
-# Pydantic Models for FastAPI
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, date
@@ -6,6 +5,7 @@ from datetime import datetime, date
 # -------------------------
 # Base Schemas
 # -------------------------
+
 class SoftwareVersionBase(BaseModel):
     id: int
     os_version: str
@@ -17,20 +17,51 @@ class SoftwareVersionBase(BaseModel):
     class Config:
         from_attributes = True
 
+
 class SoftwareInfoBase(BaseModel):
     firmware_version: Optional[str]
     last_updated: Optional[datetime]
 
+
 class ModuleBase(BaseModel):
+    module_type: Optional[str]  # "SFP", "PSU", "FAN", etc.
     name: Optional[str]
     description: Optional[str]
     part_number: Optional[str]
     serial_number: Optional[str]
     hw_revision: Optional[str]
+
     under_warranty: Optional[bool] = False
     warranty_expiry: Optional[date]
     environment_status: Optional[str]
     last_updated: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class SfpModuleBase(BaseModel):
+    interface_name: Optional[str]          # normalized interface name
+    interface_id: Optional[int]       # FK to interface table
+
+    transceiver_type: Optional[str]
+    vendor: Optional[str]
+    nominal_bitrate: Optional[int]
+    wavelength: Optional[int]
+
+    product_id: Optional[str]
+    part_number: Optional[str]
+    revision: Optional[str]
+
+    dom_temperature: Optional[float]
+    dom_rx_power: Optional[float]
+    dom_tx_power: Optional[float]
+    dom_voltage: Optional[float]
+    dom_bias_current: Optional[float]
+
+    class Config:
+        from_attributes = True
+
 
 class InterfaceBase(BaseModel):
     name: str
@@ -46,33 +77,13 @@ class InterfaceBase(BaseModel):
     media_type: Optional[str] = None
     auto_negotiate: Optional[bool] = None
     ip_address: Optional[str] = None
-    prefix_length: Optional[str] = None
+    prefix_length: Optional[int] = None
     vrf: Optional[str] = None
     link_down_reason: Optional[str] = None
     port_mode: Optional[str] = None
     fec_mode: Optional[str] = None
     last_link_flapped: Optional[str] = None
-
     last_updated: Optional[datetime] = None
-    sfp_module_id: Optional[int] = None
-
-
-class RunningConfigBase(BaseModel):
-    config: Optional[str]
-    updated_by: Optional[str]
-    last_updated: Optional[datetime]
-
-class RoutingTableBase(BaseModel):
-    vrf: Optional[str] = "default"
-    route: str
-    next_hop: Optional[str]
-    last_updated: Optional[datetime]
-
-class MacAddressTableBase(BaseModel):
-    vrf: Optional[str] = "default"
-    mac_address: str
-    interface_name: Optional[str]
-    last_updated: Optional[datetime]
 
 class VLANBase(BaseModel):
     vlan_id: int
@@ -80,9 +91,11 @@ class VLANBase(BaseModel):
     membership: Optional[str]
     last_updated: Optional[datetime]
 
+
 # -------------------------
 # Device Schemas
 # -------------------------
+
 class DeviceBase(BaseModel):
     hostname: str
     mgmt_address: str
@@ -94,80 +107,91 @@ class DeviceBase(BaseModel):
     serial_number: Optional[str]
     last_updated: Optional[datetime]
 
+    # Git‑tracked file paths
+    running_config_path: Optional[str]
+    routing_table_path: Optional[str]
+    mac_table_path: Optional[str]
+
+
 # -------------------------
 # Create Schemas (for POST)
 # -------------------------
+
 class DeviceCreate(DeviceBase):
     pass
+
 
 class SoftwareInfoCreate(SoftwareInfoBase):
     pass
 
+
 class ModuleCreate(ModuleBase):
-    pass
+    device_id: int
+    module_type: str
+    name: str
+
+
+class SfpModuleCreate(SfpModuleBase):
+    module_id: int
+
 
 class InterfaceCreate(InterfaceBase):
     pass
 
-class RunningConfigCreate(RunningConfigBase):
-    pass
-
-class RoutingTableCreate(RoutingTableBase):
-    pass
-
-class MacAddressTableCreate(MacAddressTableBase):
-    pass
 
 class VLANCreate(VLANBase):
     pass
 
+
 # -------------------------
 # Response Schemas (with IDs + relationships)
 # -------------------------
+
 class SoftwareInfo(SoftwareInfoBase):
     id: int
     version: SoftwareVersionBase
+
     class Config:
         from_attributes = True
+
+
+class SfpModule(SfpModuleBase):
+    id: int
+    module_id: int
+
+    class Config:
+        from_attributes = True
+
 
 class Module(ModuleBase):
     id: int
+    sfp_module: Optional[SfpModule] = None   # UPDATED: correct field name
+
     class Config:
         from_attributes = True
+
 
 class Interface(InterfaceBase):
     id: int
+    sfp_module: Optional[SfpModule] = None   # Optional: expose SFP on interface
+
     class Config:
         from_attributes = True
 
-class RunningConfig(RunningConfigBase):
-    id: int
-    class Config:
-        from_attributes = True
-
-class RoutingTable(RoutingTableBase):
-    id: int
-    class Config:
-        from_attributes = True
-
-class MacAddressTable(MacAddressTableBase):
-    id: int
-    class Config:
-        from_attributes = True
 
 class VLAN(VLANBase):
     id: int
+
     class Config:
         from_attributes = True
 
+
 class Device(DeviceBase):
     id: int
+
     software_info: Optional[SoftwareInfo]
     modules: List[Module] = []
     interfaces: List[Interface] = []
-    running_configs: List[RunningConfig] = []
-    routing_table: List[RoutingTable] = []
-    mac_address_table: List[MacAddressTable] = []
     vlans: List[VLAN] = []
 
     class Config:

@@ -126,7 +126,7 @@ class DeviceInventoryCollector(DeviceSession):
             # Build VRF map
             # -----------------------------
             vrf_map = self._parse_vrf_map(output.get(cmd_vrf, {}))
-            print(f"vrf map: {vrf_map}")
+            # print(f"vrf map: {vrf_map}")
             # -----------------------------
             # Parse interface details
             # -----------------------------
@@ -181,8 +181,6 @@ class DeviceInventoryCollector(DeviceSession):
 
         return vrf_map
 
-
-        return vrf_map
 
     def _parse_interface_details(self, parsed, vrf_map):
         interfaces = []
@@ -393,18 +391,38 @@ class DeviceInventoryCollector(DeviceSession):
 
                 if isinstance(trans_output, dict):
                     for intf, details in trans_output.items():
-                        # Only create module entry when transceiver_present is True
                         if not details.get("transceiver_present"):
                             continue
 
-                        modules.append({
+                        # Preserve ALL fields
+                        module_entry = {
+                            "transceiver_present": True,
                             "name": f"SFP-{intf}",
+                            "interface": intf,
                             "description": details.get("transceiver_type") or details.get("type"),
                             "pid": details.get("part_number") or details.get("cis_product_id"),
+                            "part_number": details.get("part_number") or details.get("cis_part_number"),
                             "serial_number": details.get("serial_number"),
                             "hw_revision": details.get("revision"),
-                            "interface": intf,
-                        })
+
+                            # SFP-specific fields
+                            "transceiver_type": details.get("transceiver_type"),
+                            "vendor": details.get("name"),
+                            "nominal_bitrate": details.get("nominal_bitrate"),
+                            "product_id": details.get("cis_product_id"),
+                            "revision": details.get("revision"),
+                            "wavelength": details.get("wavelength"),
+
+                            # DOM fields (if present)
+                            "dom_temperature": details.get("temperature"),
+                            "dom_rx_power": details.get("rx_power"),
+                            "dom_tx_power": details.get("tx_power"),
+                            "dom_voltage": details.get("voltage"),
+                            "dom_bias_current": details.get("bias_current"),
+                        }
+
+                        modules.append(module_entry)
+
 
 
             # -----------------------------

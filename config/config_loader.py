@@ -92,3 +92,41 @@ def load_cisco_eox_config():
     return Path(eox_config_file).expanduser()
 
 
+def load_device_management_config():
+    config_folder = None
+    operational_folder = None
+
+    try:
+        config = _get_config()
+        section = config["data_for_device_management"]
+
+        config_folder = section.get("config_folder")
+        operational_folder = section.get("operational_folder")
+
+    except KeyError:
+        # Section missing or keys missing — handled below
+        pass
+
+    # Allow environment variable overrides
+    config_folder = config_folder or os.environ.get("CONFIG_FOLDER")
+    operational_folder = operational_folder or os.environ.get("OPERATIONAL_FOLDER")
+
+    # If still missing, prompt user interactively
+    if not config_folder:
+        fail_logger.error(
+            f"{CONFIG_FILE} missing [data_for_device_management] config_folder "
+            "and CONFIG_FOLDER env var not set"
+        )
+        config_folder = input("Enter path to config folder: ")
+
+    if not operational_folder:
+        fail_logger.error(
+            f"{CONFIG_FILE} missing [data_for_device_management] operational_folder "
+            "and OPERATIONAL_FOLDER env var not set"
+        )
+        operational_folder = input("Enter path to operational data folder: ")
+
+    return {
+        "config_folder": Path(config_folder).expanduser(),
+        "operational_folder": Path(operational_folder).expanduser(),
+    }

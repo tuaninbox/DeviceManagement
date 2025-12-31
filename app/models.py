@@ -6,7 +6,7 @@ from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 from .database import Base
 
-Base = declarative_base()
+# Base = declarative_base()
 
 # -------------------------
 # Devices
@@ -25,23 +25,16 @@ class Device(Base):
     serial_number = Column(String)
     last_updated = Column(DateTime, default=datetime.now)
 
+    # Git-backed file paths
+    running_config_path = Column(String)
+    routing_table_path = Column(String)
+    mac_table_path = Column(String)
+
     # Relationships
     software_info = relationship("SoftwareInfo", back_populates="device", uselist=False)
-    modules = relationship("Module", back_populates="device")
-    interfaces = relationship("Interface", back_populates="device")
-    running_configs = relationship("RunningConfig", back_populates="device")
-    routing_table = relationship("RoutingTable", back_populates="device")
-    mac_address_table = relationship("MacAddressTable", back_populates="device")
-    vlans = relationship("VLAN", back_populates="device")
-
-# class DeviceModel(Base):
-#     __tablename__ = "devices"
-
-#     id = Column(Integer, primary_key=True, index=True)
-#     hostname = Column(String, index=True)
-#     mgmt_address = Column(String)
-#     model = Column(String)
-#     serial_number = Column(String)
+    modules = relationship("Module", back_populates="device", cascade="all, delete-orphan")
+    interfaces = relationship("Interface", back_populates="device", cascade="all, delete-orphan")
+    vlans = relationship("VLAN", back_populates="device", cascade="all, delete-orphan")
 
 # -------------------------
 # Software Version
@@ -61,7 +54,6 @@ class SoftwareVersion(Base):
     devices = relationship("SoftwareInfo", back_populates="version")
 
 
-
 # -------------------------
 # Software Information
 # -------------------------
@@ -77,28 +69,6 @@ class SoftwareInfo(Base):
     version = relationship("SoftwareVersion", back_populates="devices")
 
 
-
-# -------------------------
-# Modules
-# -------------------------
-class Module(Base):
-    __tablename__ = "modules"
-
-    id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
-    name = Column(String, nullable=False)
-    description = Column(Text)
-    part_number = Column(String)
-    serial_number = Column(String)
-    hw_revision = Column(String)
-    under_warranty = Column(Boolean, default=False)
-    warranty_expiry = Column(Date)
-    environment_status = Column(String)
-    last_updated = Column(DateTime, default=datetime.now)
-
-    device = relationship("Device", back_populates="modules")
-    interfaces = relationship("Interface", back_populates="sfp_module")
-
 # -------------------------
 # Interfaces
 # -------------------------
@@ -108,81 +78,84 @@ class Interface(Base):
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
 
-    name = Column(String, nullable=True)
+    name = Column(String)
     type = Column(String)
     status = Column(String)
     line_protocol = Column(String)
-    description = Column(Text)
+    description = Column(String)
     mac_address = Column(String)
     mtu = Column(Integer)
     speed = Column(String)
     duplex = Column(String)
     auto_mdix = Column(String)
     media_type = Column(String)
-    auto_negotiate = Column(Boolean)
+    auto_negotiate = Column(String)
     ip_address = Column(String)
-    prefix_length = Column(String)
+    prefix_length = Column(Integer)
     vrf = Column(String)
+    last_updated = Column(DateTime)
     link_down_reason = Column(String)
     port_mode = Column(String)
     fec_mode = Column(String)
-    last_link_flapped = Column(String)
-    last_updated = Column(DateTime, default=datetime.now)
-    sfp_module_id = Column(Integer, ForeignKey("modules.id", ondelete="SET NULL"))
+    last_link_flapped = Column(DateTime)
 
+    # Relationships
     device = relationship("Device", back_populates="interfaces")
-    sfp_module = relationship("Module", back_populates="interfaces")
 
+    # One SFP per interface (optional)
+    sfp_module = relationship("SfpModule", back_populates="interface_rel", uselist=False)
 
 # -------------------------
-# Running Configuration
+# Modules
 # -------------------------
-class RunningConfig(Base):
-    __tablename__ = "running_config"
+class Module(Base):
+    __tablename__ = "modules"
 
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
 
-    # ✅ Store file path instead of full config text
-    file_path = Column(String, nullable=False)
+    module_type = Column(String)
+    name = Column(String)
+    description = Column(String)
+    part_number = Column(String)
+    serial_number = Column(String)
+    hw_revision = Column(String)
+    under_warranty = Column(Boolean, default=False)
+    warranty_expiry = Column(DateTime)
+    environment_status = Column(String)
+    last_updated = Column(DateTime)
 
-    updated_by = Column(String)
-    last_updated = Column(DateTime, default=datetime.now)
+    # Relationships
+    device = relationship("Device", back_populates="modules")
 
-    device = relationship("Device", back_populates="running_configs")
-
-
-# -------------------------
-# Routing Table
-# -------------------------
-class RoutingTable(Base):
-    __tablename__ = "routing_table"
-
-    id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
-    vrf = Column(String, default="default")
-    route = Column(String, nullable=False)
-    next_hop = Column(String)
-    last_updated = Column(DateTime, default=datetime.now)
-
-    device = relationship("Device", back_populates="routing_table")
+    # Optional SFP subtype
+    sfp_module = relationship("SfpModule", back_populates="module", uselist=False, cascade="all, delete-orphan")
 
 
-# -------------------------
-# MAC Address Table
-# -------------------------
-class MacAddressTable(Base):
-    __tablename__ = "mac_address_table"
+class SfpModule(Base):
+    __tablename__ = "sfp_modules"
 
     id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
-    vrf = Column(String, default="default")
-    mac_address = Column(String, nullable=False)
+    module_id = Column(Integer, ForeignKey("modules.id", ondelete="CASCADE"))
+    interface_id = Column(Integer, ForeignKey("interfaces.id", ondelete="SET NULL"))
+
     interface_name = Column(String)
-    last_updated = Column(DateTime, default=datetime.now)
+    transceiver_type = Column(String)
+    vendor = Column(String)
+    nominal_bitrate = Column(String)
+    wavelength = Column(String)
+    product_id = Column(String)
+    part_number = Column(String)
+    revision = Column(String)
+    dom_temperature = Column(String)
+    dom_rx_power = Column(String)
+    dom_tx_power = Column(String)
+    dom_voltage = Column(String)
+    dom_bias_current = Column(String)
 
-    device = relationship("Device", back_populates="mac_address_table")
-
+    # Relationships
+    module = relationship("Module", back_populates="sfp_module")
+    interface_rel = relationship("Interface", back_populates="sfp_module")
 
 # -------------------------
 # VLANs
