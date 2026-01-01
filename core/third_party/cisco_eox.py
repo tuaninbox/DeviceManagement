@@ -79,7 +79,7 @@ class CiscoEoxClientCntlm:
         return _inner()
 
  
-class CiscoEoxClientCurlSubProcess:
+class CiscoEoxClient:
     def __init__(self, client_id, client_secret, proxy_url=None, proxy_user=None, proxy_pass=None):
         self.client_id = client_id
         self.client_secret = client_secret

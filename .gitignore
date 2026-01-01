@@ -209,3 +209,4 @@ __marimo__/
 # User file
 sampleoutput
 *.db
+logs

@@ -4,6 +4,7 @@ from . import database
 from app.routers import devices, modules
 from strawberry.fastapi import GraphQLRouter
 from .graphql import schema
+from fastapi.middleware.cors import CORSMiddleware
 
 # Create DB tables
 # This line tells SQLAlchemy:
@@ -13,6 +14,20 @@ from .graphql import schema
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Device Management Backend App")
+
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,        # list of allowed origins
+    allow_credentials=True,
+    allow_methods=["*"],          # allow all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],          # allow all headers
+)
+
 
 # Register endpoints with the app
 # REST routers

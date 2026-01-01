@@ -49,3 +49,11 @@ def save_text_file(device_hostname: str, category: str, content: str) -> str:
         f.write(content)
 
     return file_path
+
+def safe_datetime(value):
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(value)
+    except:
+        return None

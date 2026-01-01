@@ -46,54 +46,120 @@ def get_module_by_serial(serial_number: str, db: Session = Depends(get_db)):
     return module
 
 @router.post("/sync-eox")
-def sync_modules_eox(db: Session = Depends(get_db)):
+def sync_modules_eox(
+    request: schemas.SyncEoxRequest,
+    db: Session = Depends(get_db)
+):
     """
-    Sync Cisco EoX coverage information for all modules in DB.
+    Sync Cisco EoX coverage information for modules.
+    If serial_numbers is None or empty → sync ALL modules with serials.
     """
     try:
-        # Step 1: collect all serials from modules
-        modules = db.query(models.Module).filter(models.Module.serial_number.isnot(None)).all()
+        # -------------------------
+        # Step 1: Determine which serials to sync
+        # -------------------------
+        if request.serial_numbers:
+            # User provided a list → filter modules by these serials
+            normalized = {s.strip().upper() for s in request.serial_numbers}
+            modules = (
+                db.query(models.Module)
+                .filter(models.Module.serial_number.in_(normalized))
+                .all()
+            )
+        else:
+            # No list provided → sync ALL modules with serial numbers
+            modules = (
+                db.query(models.Module)
+                .filter(models.Module.serial_number.isnot(None))
+                .all()
+            )
+
         serials = [m.serial_number for m in modules if m.serial_number]
 
         if not serials:
-            fail_logger.error("No serial numbers found in modules table")
-            return {"status": "no_serials"}
+            fail_logger.error("No serial numbers found for EoX sync")
+            return {
+                "success": False,
+                "updated_modules": [],
+                "errors": [{"message": "No serial numbers found"}],
+            }
 
-        # Step 2: query Cisco EoX API
-        eox_results = get_eox_data_from_sn(serials)
-        print(eox_results)
+        success_logger.info(f"Starting EoX sync for {len(serials)} serials")
 
-        # Step 3: update modules with coverage info
-        updated_count = 0
+        # -------------------------
+        # Step 2: Query Cisco EoX API
+        # -------------------------
+        try:
+            eox_results = get_eox_data_from_sn(serials)
+        except Exception as e:
+            fail_logger.error(f"EoX API call failed: {e}")
+            return {
+                "success": False,
+                "updated_modules": [],
+                "errors": [{"message": f"EoX API error: {e}"}],
+            }
+
         serial_data_list = eox_results.get("serial_numbers", [])
 
+        # -------------------------
+        # Step 3: Update DB modules
+        # -------------------------
+        updated_modules = []
+        errors = []
+
         for m in modules:
-            # find the matching entry in the combined list
-            match = next((item for item in serial_data_list if item.get("sr_no") == m.serial_number), None)
-            if not match:
-                continue
+            try:
+                match = next(
+                    (item for item in serial_data_list if item.get("sr_no") == m.serial_number),
+                    None
+                )
+                if not match:
+                    continue
 
-            # Convert coverage_end_date string to Python date
-            date_str = match.get("coverage_end_date")
-            if date_str:
-                try:
-                    m.warranty_expiry = datetime.strptime(date_str, "%Y-%m-%d").date()
-                except ValueError:
+                # Parse coverage end date
+                date_str = match.get("coverage_end_date")
+                if date_str:
+                    try:
+                        m.warranty_expiry = datetime.strptime(date_str, "%Y-%m-%d").date()
+                    except ValueError:
+                        m.warranty_expiry = None
+                else:
                     m.warranty_expiry = None
-            else:
-                m.warranty_expiry = None
-            m.under_warranty = match.get("is_covered") == "YES"
-            # If your API response includes these fields, map them; otherwise leave None
-            m.eox_announced = match.get("end_of_sale_date")
-            m.eox_eol = match.get("end_of_support_date")
 
-            updated_count += 1
+                m.under_warranty = match.get("is_covered") == "YES"
+                m.eox_announced = match.get("end_of_sale_date")
+                m.eox_eol = match.get("end_of_support_date")
+
+                updated_modules.append({
+                    "module_id": m.id,
+                    "serial_number": m.serial_number,
+                    "updated": True,
+                })
+
+            except Exception as e:
+                errors.append({
+                    "module_id": m.id,
+                    "serial_number": m.serial_number,
+                    "error": str(e),
+                })
 
         db.commit()
-        success_logger.info(f"Updated {updated_count} modules with Cisco EoX coverage info")
-        return {"status": "success", "updated": updated_count}
+
+        success_logger.info(
+            f"EoX sync complete: {len(updated_modules)} updated, {len(errors)} errors"
+        )
+
+        return {
+            "success": len(errors) == 0,
+            "updated_modules": updated_modules,
+            "errors": errors,
+        }
 
     except Exception as e:
         db.rollback()
         fail_logger.error(f"Failed to sync EoX data: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
+        return {
+            "success": False,
+            "updated_modules": [],
+            "errors": [{"message": str(e)}],
+        }

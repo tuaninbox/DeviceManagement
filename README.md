@@ -186,3 +186,12 @@ query {
 sqlite3 devices.db
 sqlite> .schema interfaces
 
+# Generate SystemD unit file
+- podman generate systemd --name dmbe --files --new
+- mkdir -p ~/.config/systemd/user
+- mv dmbe.service ~/.config/systemd/user/
+- systemctl --user daemon-reload
+- systemctl --user enable dmbe.service
+- systemctl --user start dmbe.service
+- loginctl enable-linger $USER
+

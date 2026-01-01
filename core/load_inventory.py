@@ -11,8 +11,10 @@ import csv
 import json
 import datetime
 
-from credentials import get_credentials
-from executor import run_parallel
+from core.credentials import get_credentials
+from core.executor import run_parallel
+
+from typing import List, Optional
 
 
 # ------------------------------------------------------------
@@ -20,8 +22,9 @@ from executor import run_parallel
 # ------------------------------------------------------------
 def collect_inventory(
     listfile: str = "inventory/devices.csv",
-    hostnames: list[str] | None = None
+    hostnames: Optional[List[str]] = None
 ):
+
     """
     Load inventory from CSV, optionally filter by a list of hostnames,
     run parallel collector, and return results.

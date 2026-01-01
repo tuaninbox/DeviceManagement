@@ -199,3 +199,6 @@ class Device(DeviceBase):
 
 class SyncRequest(BaseModel):
     hostnames: Optional[List[str]] = None
+
+class SyncEoxRequest(BaseModel):
+    serial_numbers: Optional[List[str]] = None
