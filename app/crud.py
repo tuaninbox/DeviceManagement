@@ -16,6 +16,9 @@ def get_device(db: Session, device_id: int):
 def get_devices(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Device).offset(skip).limit(limit).all()
 
+def get_all_devices(db: Session): 
+    return db.query(models.Device).all()
+
 def create_device(db: Session, device: schemas.DeviceCreate):
     db_device = models.Device(**device.dict())
     db.add(db_device)

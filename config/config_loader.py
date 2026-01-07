@@ -127,6 +127,8 @@ def load_device_management_config():
         operational_folder = input("Enter path to operational data folder: ")
 
     return {
-        "config_folder": Path(config_folder).expanduser(),
-        "operational_folder": Path(operational_folder).expanduser(),
+        # "config_folder": Path(config_folder).expanduser(),
+        # "operational_folder": Path(operational_folder).expanduser(),
+        "config_folder": config_folder,
+        "operational_folder": operational_folder,
     }

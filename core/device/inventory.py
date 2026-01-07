@@ -7,17 +7,6 @@ success_logger, fail_logger = setup_loggers(logger_name="normalize_interfaces")
 class DeviceInventoryCollector(DeviceSession):
     def get_host_info(self):
         try:
-            """
-            Updated workflow:
-            1. Run show version
-            2. Run show ip interface brief (IOS/IOSXE)
-            Run show ip interface brief vrf all (NXOS)
-            3. Determine which interface has the management IP
-            4. Query VRF for that interface using:
-            - IOS/IOSXE: show run interface <intf>
-            - NXOS:      show run interface <intf>
-            """
-
             os_cmds = {
                 "ios": ["show version"],
                 "iosxe": ["show version"],

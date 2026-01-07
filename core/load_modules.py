@@ -13,11 +13,14 @@ import datetime
 
 from core.credentials import get_credentials
 from core.device.inventory import DeviceInventoryCollector   # import your collector class
+from typing import List, Optional
 
 # ------------------------------------------------------------
 # ✅ Reusable function: FastAPI can call THIS
 # ------------------------------------------------------------
-def collect_modules(listfile: str = "inventory/devices.csv"):
+def collect_modules(listfile: str = "inventory/devices.csv",
+                        hostnames: Optional[List[str]] = None
+):
     """
     Load inventory from CSV, run get_modules for each device, and return results.
     """

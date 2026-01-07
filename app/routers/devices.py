@@ -33,10 +33,34 @@ def create_device(device: schemas.DeviceCreate, db: Session = Depends(get_db)):
     success_logger.info(f"Creating device: {device.hostname}")
     return crud.create_device(db=db, device=device)
 
-@router.get("/", response_model=List[schemas.Device])
-def list_devices(db: Session = Depends(get_db)):
-    success_logger.info("Listing all devices")
-    return crud.get_devices(db)
+# @router.get("/", response_model=List[schemas.Device])
+@router.get("/", response_model=schemas.DeviceListResponse)
+def list_devices(page: int = 1,page_size: int = 100,db: Session = Depends(get_db)):
+    success_logger.info(f"Listing devices page {page} with {page_size} devices")
+    
+    # Convert page → skip
+    skip = (page - 1) * page_size
+
+    # Query total count
+    total = db.query(models.Device).count()
+
+    # Query paginated items
+    items = crud.get_devices(db, skip=skip, limit=page_size)
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+    return 
+
+@router.get("/all", response_model=List[schemas.Device])
+def list_all_devices(db: Session = Depends(get_db)):
+    success_logger.info("Listing ALL devices")
+    return crud.get_all_devices(db)
+
 
 @router.get("/{hostname}", response_model=schemas.Device)
 def get_device_by_hostname(hostname: str, db: Session = Depends(get_db)):
