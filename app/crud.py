@@ -258,10 +258,14 @@ def upsert_modules(db: Session, device_id: int, modules: list[dict]):
 
                 # 2. If not found, try suffix match (IOS-XE routers)
                 if not iface:
-                    iface = db.query(models.Interface).filter(
-                        models.Interface.device_id == device_id,
-                        models.Interface.name.endswith(raw_ifname)
-                    ).first()
+                    # Only attempt suffix match if raw_ifname is a real string
+                    if isinstance(raw_ifname, str) and raw_ifname.strip():
+                        iface = (
+                            db.query(models.Interface)
+                            .filter(models.Interface.device_id == device_id)
+                            .filter(models.Interface.name.endswith(raw_ifname))
+                            .first()
+                        )
 
                     # If suffix match found, update interface_name to full name
                     if iface:

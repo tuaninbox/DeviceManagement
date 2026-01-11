@@ -10,28 +10,56 @@ success_logger, fail_logger = setup_loggers(logger_name="app_normalizers")
 # ✅ Convert uptime string → integer seconds
 # Example: "5 weeks, 1 day, 10 hours, 50 minutes"
 # ------------------------------------------------------------
-def parse_uptime(uptime_str: str) -> int:
-    if not uptime_str:
+def parse_uptime(uptime):
+    if not uptime:
         return None
 
-    pattern = r"(\d+)\s+(week|day|hour|minute|second)s?"
-    matches = re.findall(pattern, uptime_str)
+    # -----------------------------------------
+    # Case 1: NX-OS dict format
+    # -----------------------------------------
+    if isinstance(uptime, dict):
+        days = uptime.get("days", 0)
+        hours = uptime.get("hours", 0)
+        minutes = uptime.get("minutes", 0)
+        seconds = uptime.get("seconds", 0)
 
-    total_seconds = 0
-    for value, unit in matches:
-        value = int(value)
-        if unit == "week":
-            total_seconds += value * 7 * 24 * 3600
-        elif unit == "day":
-            total_seconds += value * 24 * 3600
-        elif unit == "hour":
-            total_seconds += value * 3600
-        elif unit == "minute":
-            total_seconds += value * 60
-        elif unit == "second":
-            total_seconds += value
+        return (
+            days * 24 * 3600 +
+            hours * 3600 +
+            minutes * 60 +
+            seconds
+        )
 
-    return total_seconds
+    # -----------------------------------------
+    # Case 2: IOS / IOS-XE string format
+    # -----------------------------------------
+    if isinstance(uptime, str):
+        # Add support for "years"
+        pattern = r"(\d+)\s+(year|week|day|hour|minute|second)s?"
+        matches = re.findall(pattern, uptime.lower())
+
+        total_seconds = 0
+        for value, unit in matches:
+            value = int(value)
+
+            if unit == "year":
+                total_seconds += value * 365 * 24 * 3600
+            elif unit == "week":
+                total_seconds += value * 7 * 24 * 3600
+            elif unit == "day":
+                total_seconds += value * 24 * 3600
+            elif unit == "hour":
+                total_seconds += value * 3600
+            elif unit == "minute":
+                total_seconds += value * 60
+            elif unit == "second":
+                total_seconds += value
+
+        return total_seconds
+
+    # Unknown format
+    return None
+
 
 # Detect Module Types
 def classify_module_type(description: str, part_number: str = "", name: str = "") -> str:

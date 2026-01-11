@@ -47,7 +47,7 @@ def collect_inventory(
 
         filtered = [
             row for row in inventory_rows
-            if row["hostname"].strip().lower() in normalized
+            if row["Host"].strip().lower() in normalized
         ]
 
         if not filtered:

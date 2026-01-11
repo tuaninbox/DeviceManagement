@@ -46,11 +46,14 @@ class DeviceInventoryCollector(DeviceSession):
             # -----------------------------
             show_ver = output.get("show version", {})
             version_info = show_ver.get("version", {})
+            # NX-OS Genie structure 
+            platform_info = show_ver.get("platform", {})
+            hardware_info = platform_info.get("hardware", {})
 
-            host_info["version"] = version_info.get("version")
-            host_info["uptime"] = version_info.get("uptime")
-            host_info["serial"] = version_info.get("chassis_sn") or version_info.get("processor_board_id")
-            host_info["model"] = version_info.get("chassis") or version_info.get("platform")
+            host_info["version"] = version_info.get("version") or platform_info.get("software", {}).get("system_version")
+            host_info["uptime"] = version_info.get("uptime") or platform_info.get("kernel_uptime")
+            host_info["serial"] = version_info.get("chassis_sn") or version_info.get("processor_board_id") or hardware_info.get("processor_board_id") or hardware_info.get("serial_number") or hardware_info.get("chassis_sn")
+            host_info["model"] = version_info.get("chassis") or version_info.get("platform") or hardware_info.get("model") or hardware_info.get("chassis")
             return host_info
 
         except Exception as e:

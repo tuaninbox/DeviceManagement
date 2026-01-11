@@ -202,6 +202,8 @@ class SyncRequest(BaseModel):
 
 class SyncEoxRequest(BaseModel):
     serial_numbers: Optional[List[str]] = None
+    device_ids: Optional[List[int]] = None
+
 
 class DeviceListResponse(BaseModel):
     items: List[Device]
