@@ -1,6 +1,6 @@
 # app/normalizers/device_normalizer.py
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 from core.logging_manager import setup_loggers
 
@@ -130,9 +130,10 @@ def normalize_device(raw: dict) -> dict:
         "uptime": parse_uptime(host.get("uptime")),
         "model": host.get("model"),
         "serial_number": host.get("serial"),
-        "device_group": None,
-        "location": None,
+        "device_group": host.get("group"),
+        "location": host.get("location"),
         "vrf": None,
+        "last_updated": datetime.now(timezone.utc),
     }
 
 
@@ -165,7 +166,7 @@ def normalize_interfaces(raw: dict) -> list[dict]:
             "ip_address": iface.get("ip_address"),
             "prefix_length": iface.get("prefix_length"),
             "vrf": iface.get("vrf"),
-            "last_updated": datetime.now(),
+            "last_updated": datetime.now(timezone.utc),
             "link_down_reason": iface.get("link_down_reason"),
             "port_mode": iface.get("port_mode"),
             "fec_mode": iface.get("fec_mode"),
@@ -218,7 +219,7 @@ def normalize_modules(raw: dict) -> list[dict]:
                     "vendor": v.get("vendor"),
                     "nominal_bitrate": v.get("nominal_bitrate"),
                     "product_id": v.get("product_id"),
-                    "last_updated": datetime.now(),
+                    "last_updated": datetime.now(timezone.utc),
                     "transceiver_type": v.get("transceiver_type"),
                     "revision": v.get("revision"),
                     "wavelength": v.get("wavelength"),
@@ -252,7 +253,7 @@ def normalize_modules(raw: dict) -> list[dict]:
                 "under_warranty": v.get("under_warranty", False),
                 "warranty_expiry": v.get("warranty_expiry"),
                 "environment_status": v.get("environment_status"),
-                "last_updated": datetime.now(),
+                "last_updated": datetime.now(timezone.utc),
                 "module_type": module_type,
             }
 
@@ -295,3 +296,13 @@ def normalize_routing_table(raw):
 
 def normalize_mac_table(raw):
     return raw.get("mac_table")
+
+def normalize_serial(value):
+    if not value:
+        return None
+
+    s = str(value).strip().lower()
+    if s in {"n/a", "na", "none", "unavailable", "unknown", ""}:
+        return None
+
+    return value

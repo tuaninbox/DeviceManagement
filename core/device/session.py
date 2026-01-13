@@ -15,7 +15,12 @@ import configparser
 from pathlib import Path
 
 class DeviceSession:
-    def __init__(self, hostname, host, os, user, password, cmdlist, port: int =22, success_logger=None, fail_logger=None, debug=0, outfolder="output", sanitizeconfig=True, removepassword: int = 1|2|4|8):
+    def __init__(self, hostname, host, os, user, password, cmdlist, port: int =22, success_logger=None, fail_logger=None, debug=0, 
+                outfolder="output", 
+                sanitizeconfig=True, 
+                removepassword: int = 1|2|4|8,
+                location=None,
+                group=None):
         try: 
             self.port = int(port) if str(port).strip() else 22 
         except ValueError: 
@@ -32,6 +37,8 @@ class DeviceSession:
         self.outfolder = outfolder
         self.sanitizeconfig = sanitizeconfig
         self.removepassword = removepassword
+        self.location = location
+        self.group = group
         self.result = {
             "hostname": hostname,
             "host": host,

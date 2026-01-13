@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app.services.job_manager import update_job
 from app import models
 from core.eox import get_eox_data_from_sn
 
 def run_module_eox_sync(job_id, serials, db_session_factory):
-    update_job(job_id, status="running", started_at=datetime.utcnow())
+    update_job(job_id, status="running", started_at=datetime.now(timezone.utc))
 
     session = db_session_factory()
 
@@ -16,7 +16,7 @@ def run_module_eox_sync(job_id, serials, db_session_factory):
             update_job(
                 job_id,
                 status="failed",
-                finished_at=datetime.utcnow(),
+                finished_at=datetime.now(timezone.utc),
                 error=f"EoX API error: {e}",
             )
             return
@@ -74,7 +74,7 @@ def run_module_eox_sync(job_id, serials, db_session_factory):
         update_job(
             job_id,
             status="completed",
-            finished_at=datetime.utcnow(),
+            finished_at=datetime.now(timezone.utc),
             result={
                 "updated_modules": updated_modules,
                 "errors": errors,
@@ -86,6 +86,6 @@ def run_module_eox_sync(job_id, serials, db_session_factory):
         update_job(
             job_id,
             status="failed",
-            finished_at=datetime.utcnow(),
+            finished_at=datetime.now(timezone.utc),
             error=str(e),
         )

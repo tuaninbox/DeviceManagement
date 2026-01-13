@@ -6,7 +6,6 @@ from sqlalchemy import func
 from app.services.job_manager import create_job
 from app.services.device_sync import run_device_sync
 from app import models, schemas, crud, database
-from core.load_inventory import collect_inventory
 from app.normalizers.device_normalizer import (
     normalize_device,
     normalize_interfaces,
@@ -15,7 +14,7 @@ from app.normalizers.device_normalizer import (
 )
 from core.logging_manager import setup_loggers
 from config.config_loader import load_device_management_config
-from pathlib import Path
+from core.utility.utility import safe_read_text, MAX_FILE_BYTES
 
 # Set up loggers
 success_logger, fail_logger = setup_loggers(logger_name="app_router_devices")
@@ -42,6 +41,8 @@ def create_device(device: schemas.DeviceCreate, db: Session = Depends(get_db)):
     success_logger.info(f"Creating device: {device.hostname}")
     return crud.create_device(db=db, device=device)
 
+
+# Get all devices
 # @router.get("/", response_model=List[schemas.Device])
 @router.get("/", response_model=schemas.DeviceListResponse)
 def list_devices(page: int = 1,page_size: int = 100,db: Session = Depends(get_db)):
@@ -87,7 +88,56 @@ def get_device_by_hostname(hostname: str, db: Session = Depends(get_db)):
 
     return device
 
+# Get configuration and operational data
+@router.get("/{hostname}/configops", response_model=schemas.DeviceConfigOpsEnvelope)
+def get_device_config_ops(
+    hostname: str,
+    db: Session = Depends(get_db),
+    max_bytes: int = MAX_FILE_BYTES,  # allow clients to limit returned size
+):
+    """
+    Returns configuration and operational data for a single device.
+    Reads from running_config_path and routing_table_path.
+    Response is wrapped with { success, result, message }.
+    Does not raise 404; returns success=False in not-found case for uniformity.
+    """
 
+    device = (
+        db.query(models.Device)
+        .filter(func.lower(models.Device.hostname) == hostname.lower())
+        .first()
+    )
+
+    if not device:
+        return {
+            "success": False,
+            "result": None,
+            "message": f"Device {hostname} not found",
+        }
+
+    configuration = safe_read_text(
+        getattr(device, "running_config_path", None),
+        max_bytes=max_bytes
+    )
+    operationaldata = safe_read_text(
+        getattr(device, "routing_table_path", None),
+        max_bytes=max_bytes
+    )
+
+    result = schemas.DeviceConfigOps(
+        device=getattr(device, "name", f"{hostname}"),
+        configuration=configuration,
+        operationaldata=operationaldata,
+    )
+
+    return {
+        "success": True,
+        "result": result,
+        "message": "Configuration and operational data fetched",
+    }
+
+
+# Sync Devices
 @router.post("/sync")
 def sync_devices(
     request: schemas.SyncRequest,
@@ -98,7 +148,7 @@ def sync_devices(
 
     # Create job entry
     job_id = create_job(
-        description=f"Device sync for {hostnames or 'ALL'}",
+        description=f"Device sync for {','.join(hostnames) or 'ALL'}",
         category="device_sync"
     )
 
@@ -116,77 +166,4 @@ def sync_devices(
         "job_id": job_id,
         "message": "Device sync started"
     }
-
-
-
-# @router.post("/sync")
-# def sync_devices(request: schemas.SyncRequest, db: Session = Depends(get_db)):
-#     hostnames = request.hostnames
-
-#     # If hostnames missing or empty → sync ALL devices
-#     if not hostnames:
-#         hostnames = None
-
-#     success_logger.info(f"Starting sync for devices: {hostnames or 'ALL'}")
-
-#     # Load folders from config
-#     cfg = load_device_management_config()
-#     config_folder = cfg["config_folder"]
-#     operational_folder = cfg["operational_folder"]
-
-#     updated_devices = []
-#     errors = []
-
-#     try:
-#         raw_list = collect_inventory(hostnames=hostnames)
-#     except Exception as e:
-#         return {
-#             "success": False,
-#             "error": f"Failed to collect inventory: {e}"
-#         }
-
-#     for raw in raw_list:
-#         hostname = raw["host_info"]["hostname"]
-#         success_logger.info(f"Syncing device: {hostname}")
-
-#         try:
-#             # DEVICE METADATA
-#             device_data = normalize_device(raw)
-#             device_data["running_config_path"] = str(config_folder / hostname)
-#             device_data["routing_table_path"] = str(operational_folder / hostname)
-#             device_data["mac_table_path"] = str(operational_folder / hostname)
-
-#             db_dev = crud.upsert_device(db, device_data)
-
-#             # INTERFACES
-#             iface_list = normalize_interfaces(raw)
-#             crud.upsert_interfaces(db, db_dev.id, iface_list)
-
-#             # MODULES
-#             module_list = normalize_modules(raw)
-#             crud.upsert_modules(db, db_dev.id, module_list)
-
-#             # SOFTWARE
-#             sw = normalize_software_info(raw)
-#             crud.upsert_software_info(db, db_dev.id, sw)
-
-#             updated_devices.append({
-#                 "hostname": hostname,
-#                 "device_id": db_dev.id,
-#                 "updated": {
-#                     "device": True,
-#                     "interfaces": len(iface_list),
-#                     "modules": len(module_list),
-#                     "software": True
-#                 }
-#             })
-
-#         except Exception as e:
-#             errors.append({"hostname": hostname, "error": str(e)})
-
-#     return {
-#         "success": len(errors) == 0,
-#         "updated_devices": updated_devices,
-#         "errors": errors
-#     }
 

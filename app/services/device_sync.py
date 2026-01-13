@@ -14,15 +14,7 @@ from pathlib import Path
 # Set up loggers
 success_logger, fail_logger = setup_loggers(logger_name="app_services_device_sync")
 
-from datetime import datetime
-from app.services.job_manager import update_job
-from core.load_inventory import collect_inventory
-from app.normalizers.device_normalizer import (
-    normalize_device,
-    normalize_interfaces,
-    normalize_modules,
-    normalize_software_info,
-)
+from datetime import datetime, timezone
 import app.crud as crud
 
 
@@ -31,7 +23,7 @@ def run_device_sync(job_id, hostnames, db_session_factory):
     Background worker that performs full device inventory sync.
     Updates job status throughout the lifecycle.
     """
-    update_job(job_id, status="running", started_at=datetime.utcnow())
+    update_job(job_id, status="running", started_at=datetime.now(timezone.utc))
 
     db = db_session_factory()
 
@@ -54,7 +46,7 @@ def run_device_sync(job_id, hostnames, db_session_factory):
         except Exception as e:
             msg = f"Failed to collect inventory: {e}"
             fail_logger.error(f"[JOB {job_id}] {msg}")
-            update_job(job_id, status="failed", finished_at=datetime.utcnow(), error=msg)
+            update_job(job_id, status="failed", finished_at=datetime.now(timezone.utc), error=msg)
             return
 
         # ----------------------------------------------------
@@ -67,9 +59,9 @@ def run_device_sync(job_id, hostnames, db_session_factory):
             try:
                 # DEVICE METADATA
                 device_data = normalize_device(raw)
-                device_data["running_config_path"] = str(config_folder / hostname)
-                device_data["routing_table_path"] = str(operational_folder / hostname)
-                device_data["mac_table_path"] = str(operational_folder / hostname)
+                device_data["running_config_path"] = str(config_folder / hostname.lower())
+                device_data["routing_table_path"] = str(operational_folder / hostname.lower())
+                device_data["mac_table_path"] = str(operational_folder / hostname.lower())
 
                 db_dev = crud.upsert_device(db, device_data)
 
@@ -113,7 +105,7 @@ def run_device_sync(job_id, hostnames, db_session_factory):
         update_job(
             job_id,
             status="completed",
-            finished_at=datetime.utcnow(),
+            finished_at=datetime.now(timezone.utc),
             result={
                 "updated_devices": updated_devices,
                 "errors": errors,
@@ -127,7 +119,7 @@ def run_device_sync(job_id, hostnames, db_session_factory):
         update_job(
             job_id,
             status="failed",
-            finished_at=datetime.utcnow(),
+            finished_at=datetime.now(timezone.utc),
             error=msg
         )
 

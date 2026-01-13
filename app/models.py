@@ -3,7 +3,7 @@ from sqlalchemy import (
     Column, Integer, String, Text, Date, DateTime, ForeignKey, Boolean
 )
 from sqlalchemy.orm import relationship, declarative_base
-from datetime import datetime
+from datetime import datetime, timezone
 from .database import Base
 
 # Base = declarative_base()
@@ -23,7 +23,7 @@ class Device(Base):
     uptime = Column(Integer)
     model = Column(String)
     serial_number = Column(String)
-    last_updated = Column(DateTime, default=datetime.now)
+    last_updated = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc) )
 
     # Git-backed file paths
     running_config_path = Column(String)
@@ -49,7 +49,7 @@ class SoftwareVersion(Base):
     category = Column(String)    # e.g., "Network OS", "Switch OS", "Router OS"
 
     vulnerability = Column(Text)  # JSON or text describing CVEs
-    last_scanned = Column(DateTime, default=datetime.now)
+    last_scanned = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc) )
 
     devices = relationship("SoftwareInfo", back_populates="version")
 
@@ -64,7 +64,7 @@ class SoftwareInfo(Base):
     device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"))
     version_id = Column(Integer, ForeignKey("software_versions.id"))
     firmware_version = Column(String)
-    last_updated = Column(DateTime, default=datetime.now)
+    last_updated = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc) )
     device = relationship("Device", back_populates="software_info")
     version = relationship("SoftwareVersion", back_populates="devices")
 
@@ -93,11 +93,11 @@ class Interface(Base):
     ip_address = Column(String)
     prefix_length = Column(Integer)
     vrf = Column(String)
-    last_updated = Column(DateTime)
+    last_updated = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     link_down_reason = Column(String)
     port_mode = Column(String)
     fec_mode = Column(String)
-    last_link_flapped = Column(DateTime)
+    last_link_flapped = Column( DateTime(timezone=True))
 
     # Relationships
     device = relationship("Device", back_populates="interfaces")
@@ -121,9 +121,9 @@ class Module(Base):
     serial_number = Column(String)
     hw_revision = Column(String)
     under_warranty = Column(Boolean, default=False)
-    warranty_expiry = Column(DateTime)
+    warranty_expiry = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     environment_status = Column(String)
-    last_updated = Column(DateTime)
+    last_updated = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     device = relationship("Device", back_populates="modules")
@@ -168,6 +168,6 @@ class VLAN(Base):
     vlan_id = Column(Integer, nullable=False)
     name = Column(String)
     membership = Column(Text)
-    last_updated = Column(DateTime, default=datetime.now)
+    last_updated = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc) )
 
     device = relationship("Device", back_populates="vlans")

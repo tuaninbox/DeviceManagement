@@ -2,6 +2,9 @@ from sqlalchemy.orm import Session
 from . import models, schemas
 from core.logging_manager import setup_loggers
 from core.utility.utility import safe_datetime
+from app.normalizers.device_normalizer import (
+    normalize_serial,
+)
 
 # Initialize loggers for this CRUD module
 success_logger, fail_logger = setup_loggers(logger_name="app_crud")
@@ -219,80 +222,157 @@ def create_sfp_module(db: Session, sfp: schemas.SfpModuleCreate):
 def get_modules(db: Session):
     return db.query(models.Module).all()
 
+
 def upsert_modules(db: Session, device_id: int, modules: list[dict]):
     try:
-        # Delete old modules (cascade deletes SFP submodules)
+        # ---------------------------------------------------------
+        # 1. Normalize incoming serials and collect valid ones
+        # ---------------------------------------------------------
+        incoming_serials = {
+            normalize_serial(m.get("serial_number"))
+            for m in modules
+        }
+        incoming_serials.discard(None)  # remove invalid serials
+
+        # ---------------------------------------------------------
+        # 2. Delete only modules with VALID serials that disappeared
+        # ---------------------------------------------------------
         db.query(models.Module).filter(
-            models.Module.device_id == device_id
-        ).delete()
-        db.commit()
+            models.Module.device_id == device_id,
+            models.Module.serial_number.isnot(None),
+            models.Module.serial_number != "",
+            ~models.Module.serial_number.in_(incoming_serials)
+        ).delete(synchronize_session=False)
 
+        db.flush()
+
+        # ---------------------------------------------------------
+        # 3. Upsert each module
+        # ---------------------------------------------------------
         for mod in modules:
-            # 1. Insert base module
-            db_mod = models.Module(
-                device_id=device_id,
-                module_type=mod.get("module_type", "OTHER"),
-                name=mod.get("name"),
-                description=mod.get("description"),
-                part_number=mod.get("part_number"),
-                serial_number=mod.get("serial_number"),
-                hw_revision=mod.get("hw_revision"),
-                under_warranty=mod.get("under_warranty", False),
-                warranty_expiry=mod.get("warranty_expiry"),
-                environment_status=mod.get("environment_status"),
-                last_updated=safe_datetime(mod.get("last_updated")),
-            )
-            db.add(db_mod)
-            db.flush()  # get db_mod.id without commit
+            serial = normalize_serial(mod.get("serial_number"))
 
-            # 2. Insert SFP subtype if applicable
+            # Try to find existing module by serial (only if valid)
+            existing = None
+            if serial:
+                existing = db.query(models.Module).filter(
+                    models.Module.device_id == device_id,
+                    models.Module.serial_number == serial
+                ).first()
+
+            if existing:
+                # -------------------------
+                # UPDATE EXISTING MODULE
+                # -------------------------
+                existing.module_type = mod.get("module_type", existing.module_type)
+                existing.name = mod.get("name", existing.name)
+                existing.description = mod.get("description", existing.description)
+                existing.part_number = mod.get("part_number", existing.part_number)
+                existing.hw_revision = mod.get("hw_revision", existing.hw_revision)
+                existing.environment_status = mod.get("environment_status", existing.environment_status)
+
+                # Only update warranty fields if incoming data is NOT None
+                if mod.get("under_warranty") is not None:
+                    existing.under_warranty = mod["under_warranty"]
+
+                if mod.get("warranty_expiry") is not None:
+                    existing.warranty_expiry = mod["warranty_expiry"]
+
+                # Update last_updated only if provided
+                new_last = safe_datetime(mod.get("last_updated"))
+                if new_last:
+                    existing.last_updated = new_last
+
+                db_mod = existing
+
+            else:
+                # -------------------------
+                # INSERT NEW MODULE
+                # -------------------------
+                db_mod = models.Module(
+                    device_id=device_id,
+                    module_type=mod.get("module_type", "OTHER"),
+                    name=mod.get("name"),
+                    description=mod.get("description"),
+                    part_number=mod.get("part_number"),
+                    serial_number=serial,  # may be None
+                    hw_revision=mod.get("hw_revision"),
+                    under_warranty=mod.get("under_warranty", False),
+                    warranty_expiry=mod.get("warranty_expiry"),
+                    environment_status=mod.get("environment_status"),
+                    last_updated=safe_datetime(mod.get("last_updated")),
+                )
+                db.add(db_mod)
+                db.flush()
+
+            # ---------------------------------------------------------
+            # 4. Handle SFP submodules (UPSERT)
+            # ---------------------------------------------------------
             if mod.get("module_type") == "SFP":
 
                 raw_ifname = mod.get("interface_name")
 
-                # 1. Try exact match first (NX-OS, IOS-XE switches)
+                # Try exact match
                 iface = db.query(models.Interface).filter(
                     models.Interface.device_id == device_id,
                     models.Interface.name == raw_ifname
                 ).first()
 
-                # 2. If not found, try suffix match (IOS-XE routers)
-                if not iface:
-                    # Only attempt suffix match if raw_ifname is a real string
-                    if isinstance(raw_ifname, str) and raw_ifname.strip():
-                        iface = (
-                            db.query(models.Interface)
-                            .filter(models.Interface.device_id == device_id)
-                            .filter(models.Interface.name.endswith(raw_ifname))
-                            .first()
-                        )
-
-                    # If suffix match found, update interface_name to full name
+                # Try suffix match
+                if not iface and isinstance(raw_ifname, str) and raw_ifname.strip():
+                    iface = (
+                        db.query(models.Interface)
+                        .filter(models.Interface.device_id == device_id)
+                        .filter(models.Interface.name.endswith(raw_ifname))
+                        .first()
+                    )
                     if iface:
                         mod["interface_name"] = iface.name
 
                 interface_id = iface.id if iface else None
 
-                db_sfp = models.SfpModule(
-                    module_id=db_mod.id,
-                    interface_name=mod.get("interface_name"),
-                    interface_id=interface_id,
-                    transceiver_type=mod.get("transceiver_type"),
-                    vendor=mod.get("vendor"),
-                    nominal_bitrate=mod.get("nominal_bitrate"),
-                    wavelength=mod.get("wavelength"),
-                    product_id=mod.get("product_id"),
-                    part_number=mod.get("part_number"),
-                    revision=mod.get("revision"),
-                    dom_temperature=mod.get("dom_temperature"),
-                    dom_rx_power=mod.get("dom_rx_power"),
-                    dom_tx_power=mod.get("dom_tx_power"),
-                    dom_voltage=mod.get("dom_voltage"),
-                    dom_bias_current=mod.get("dom_bias_current"),
-                )
-                db.add(db_sfp)
+                # Try to find existing SFP
+                existing_sfp = db.query(models.SfpModule).filter(
+                    models.SfpModule.module_id == db_mod.id,
+                    models.SfpModule.interface_name == mod.get("interface_name")
+                ).first()
 
+                if existing_sfp:
+                    # UPDATE SFP
+                    for field in [
+                        "transceiver_type", "vendor", "nominal_bitrate",
+                        "wavelength", "product_id", "part_number", "revision",
+                        "dom_temperature", "dom_rx_power", "dom_tx_power",
+                        "dom_voltage", "dom_bias_current"
+                    ]:
+                        value = mod.get(field)
+                        if value is not None:
+                            setattr(existing_sfp, field, value)
 
+                else:
+                    # INSERT NEW SFP
+                    db_sfp = models.SfpModule(
+                        module_id=db_mod.id,
+                        interface_name=mod.get("interface_name"),
+                        interface_id=interface_id,
+                        transceiver_type=mod.get("transceiver_type"),
+                        vendor=mod.get("vendor"),
+                        nominal_bitrate=mod.get("nominal_bitrate"),
+                        wavelength=mod.get("wavelength"),
+                        product_id=mod.get("product_id"),
+                        part_number=mod.get("part_number"),
+                        revision=mod.get("revision"),
+                        dom_temperature=mod.get("dom_temperature"),
+                        dom_rx_power=mod.get("dom_rx_power"),
+                        dom_tx_power=mod.get("dom_tx_power"),
+                        dom_voltage=mod.get("dom_voltage"),
+                        dom_bias_current=mod.get("dom_bias_current"),
+                    )
+                    db.add(db_sfp)
+
+        # ---------------------------------------------------------
+        # 5. Commit all changes
+        # ---------------------------------------------------------
         db.commit()
         success_logger.info(f"Upserted {len(modules)} modules for device {device_id}")
 
@@ -305,31 +385,88 @@ def upsert_modules(db: Session, device_id: int, modules: list[dict]):
         raise
 
 
+# def upsert_modules(db: Session, device_id: int, modules: list[dict]):
+#     try:
+#         # Delete old modules (cascade deletes SFP submodules)
+#         db.query(models.Module).filter(
+#             models.Module.device_id == device_id
+#         ).delete()
+#         db.commit()
 
-# def link_interfaces_to_modules(db: Session, device_id: int, iface_list: list, module_list: list):
-#     """
-#     Link Interface rows to Module rows by matching names or slot/transceiver strings.
-#     """
-#     for iface in iface_list:
-#         iface_name = iface.get("name")
-#         slot_trans = None
-#         if iface_name and "Ethernet" in iface_name:
-#             slot_trans = iface_name.split("Ethernet")[-1]  # e.g. "0/0/1"
+#         for mod in modules:
+#             # 1. Insert base module
+#             db_mod = models.Module(
+#                 device_id=device_id,
+#                 module_type=mod.get("module_type", "OTHER"),
+#                 name=mod.get("name"),
+#                 description=mod.get("description"),
+#                 part_number=mod.get("part_number"),
+#                 serial_number=mod.get("serial_number"),
+#                 hw_revision=mod.get("hw_revision"),
+#                 under_warranty=mod.get("under_warranty", False),
+#                 warranty_expiry=mod.get("warranty_expiry"),
+#                 environment_status=mod.get("environment_status"),
+#                 last_updated=safe_datetime(mod.get("last_updated")),
+#             )
+#             db.add(db_mod)
+#             db.flush()  # get db_mod.id without commit
 
-#         # Try to find a matching module
-#         match = None
-#         for m in module_list:
-#             m_name = m.get("name")
-#             if not m_name:
-#                 continue
-#             if m_name == iface_name or (slot_trans and m_name == slot_trans):
-#                 match = db.query(Module).filter_by(device_id=device_id, name=m_name).first()
-#                 break
+#             # 2. Insert SFP subtype if applicable
+#             if mod.get("module_type") == "SFP":
 
-#         if match:
-#             iface_obj = db.query(Interface).filter_by(device_id=device_id, name=iface_name).first()
-#             if iface_obj:
-#                 iface_obj.sfp_module_id = match.id
-#                 db.add(iface_obj)
+#                 raw_ifname = mod.get("interface_name")
 
-#     db.commit()
+#                 # 1. Try exact match first (NX-OS, IOS-XE switches)
+#                 iface = db.query(models.Interface).filter(
+#                     models.Interface.device_id == device_id,
+#                     models.Interface.name == raw_ifname
+#                 ).first()
+
+#                 # 2. If not found, try suffix match (IOS-XE routers)
+#                 if not iface:
+#                     # Only attempt suffix match if raw_ifname is a real string
+#                     if isinstance(raw_ifname, str) and raw_ifname.strip():
+#                         iface = (
+#                             db.query(models.Interface)
+#                             .filter(models.Interface.device_id == device_id)
+#                             .filter(models.Interface.name.endswith(raw_ifname))
+#                             .first()
+#                         )
+
+#                     # If suffix match found, update interface_name to full name
+#                     if iface:
+#                         mod["interface_name"] = iface.name
+
+#                 interface_id = iface.id if iface else None
+
+#                 db_sfp = models.SfpModule(
+#                     module_id=db_mod.id,
+#                     interface_name=mod.get("interface_name"),
+#                     interface_id=interface_id,
+#                     transceiver_type=mod.get("transceiver_type"),
+#                     vendor=mod.get("vendor"),
+#                     nominal_bitrate=mod.get("nominal_bitrate"),
+#                     wavelength=mod.get("wavelength"),
+#                     product_id=mod.get("product_id"),
+#                     part_number=mod.get("part_number"),
+#                     revision=mod.get("revision"),
+#                     dom_temperature=mod.get("dom_temperature"),
+#                     dom_rx_power=mod.get("dom_rx_power"),
+#                     dom_tx_power=mod.get("dom_tx_power"),
+#                     dom_voltage=mod.get("dom_voltage"),
+#                     dom_bias_current=mod.get("dom_bias_current"),
+#                 )
+#                 db.add(db_sfp)
+
+
+#         db.commit()
+#         success_logger.info(f"Upserted {len(modules)} modules for device {device_id}")
+
+#     except Exception as e:
+#         db.rollback()
+#         fail_logger.error(
+#             f"Failed to upsert modules for device {device_id}: {e}",
+#             exc_info=True
+#         )
+#         raise
+

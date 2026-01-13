@@ -34,6 +34,8 @@ class DeviceInventoryCollector(DeviceSession):
                 "model": None,
                 "mgmt_interface": None,
                 "mgmt_vrf": None,
+                "location": self.location,
+                "group": self.group,
             }
 
             if not result.get("success"):

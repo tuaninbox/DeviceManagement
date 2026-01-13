@@ -1,12 +1,41 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
-from datetime import datetime, date
+from datetime import datetime, date, timezone
+
+# This is timezone that convert to UTC, used with DB that support timezone such as POSTGRESQL
+# class UTCModel(BaseModel):
+#     model_config = ConfigDict(
+#         from_attributes=True,
+#         json_encoders={
+#             datetime: lambda v: (
+#                 v.astimezone(timezone.utc)
+#                 .isoformat()
+#                 .replace("+00:00", "Z")
+#                 if v is not None else None
+#             )
+#         }
+#     )
+
+# This is Model that just add correct format of TZ without converting, used with SQLite which doesn't support timezone
+class UTCModel(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            datetime: lambda v: (
+                # Treat naive datetime as UTC, but DO NOT convert
+                v.replace(tzinfo=timezone.utc)
+                 .isoformat()
+                 .replace("+00:00", "Z")
+                if v is not None else None
+            )
+        }
+    )
 
 # -------------------------
 # Base Schemas
 # -------------------------
 
-class SoftwareVersionBase(BaseModel):
+class SoftwareVersionBase(UTCModel):
     id: int
     os_version: str
     type: Optional[str]
@@ -18,12 +47,12 @@ class SoftwareVersionBase(BaseModel):
         from_attributes = True
 
 
-class SoftwareInfoBase(BaseModel):
+class SoftwareInfoBase(UTCModel):
     firmware_version: Optional[str]
     last_updated: Optional[datetime]
 
 
-class ModuleBase(BaseModel):
+class ModuleBase(UTCModel):
     module_type: Optional[str]  # "SFP", "PSU", "FAN", etc.
     name: Optional[str]
     description: Optional[str]
@@ -40,7 +69,7 @@ class ModuleBase(BaseModel):
         from_attributes = True
 
 
-class SfpModuleBase(BaseModel):
+class SfpModuleBase(UTCModel):
     interface_name: Optional[str]          # normalized interface name
     interface_id: Optional[int]       # FK to interface table
 
@@ -63,7 +92,7 @@ class SfpModuleBase(BaseModel):
         from_attributes = True
 
 
-class InterfaceBase(BaseModel):
+class InterfaceBase(UTCModel):
     name: str
     type: Optional[str] = None
     status: Optional[str] = None
@@ -85,7 +114,7 @@ class InterfaceBase(BaseModel):
     last_link_flapped: Optional[str] = None
     last_updated: Optional[datetime] = None
 
-class VLANBase(BaseModel):
+class VLANBase(UTCModel):
     vlan_id: int
     name: Optional[str]
     membership: Optional[str]
@@ -96,7 +125,7 @@ class VLANBase(BaseModel):
 # Device Schemas
 # -------------------------
 
-class DeviceBase(BaseModel):
+class DeviceBase(UTCModel):
     hostname: str
     mgmt_address: str
     vrf: Optional[str]
@@ -197,16 +226,36 @@ class Device(DeviceBase):
     class Config:
         from_attributes = True
 
-class SyncRequest(BaseModel):
+class SyncRequest(UTCModel):
     hostnames: Optional[List[str]] = None
 
-class SyncEoxRequest(BaseModel):
+class SyncEoxRequest(UTCModel):
     serial_numbers: Optional[List[str]] = None
     device_ids: Optional[List[int]] = None
 
 
-class DeviceListResponse(BaseModel):
+class DeviceListResponse(UTCModel):
     items: List[Device]
     total: int
     page: int
     page_size: int
+
+class DeviceConfigOps(UTCModel):
+    device: str
+    configuration: Optional[str] = None
+    operationaldata: Optional[str] = None
+
+    
+class DeviceConfigOpsEnvelope(UTCModel):
+    success: bool
+    result: Optional[DeviceConfigOps] = None
+    message: Optional[str] = None
+
+# # (Optional) a list endpoint for future use
+# class DeviceConfigOpsListEnvelope(BaseModel):
+#     success: bool
+#     items: Optional[List[DeviceConfigOps]] = None
+#     total: Optional[int] = None
+#     page: Optional[int] = None
+#     page_size: Optional[int] = None
+#     message: Optional[str] = None

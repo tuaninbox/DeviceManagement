@@ -47,6 +47,8 @@ def run_parallel(
                 port=row["Port"],
                 sanitizeconfig=sanitizeconfig,
                 removepassword=removepassword,
+                location=row["Location"],
+                group=row["Group"],
                 **extra_kwargs
             )
 
