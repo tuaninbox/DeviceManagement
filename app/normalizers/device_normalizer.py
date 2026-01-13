@@ -302,7 +302,7 @@ def normalize_serial(value):
         return None
 
     s = str(value).strip().lower()
-    if s in {"n/a", "na", "none", "unavailable", "unknown", ""}:
+    if s in {"n/a", "na", "none", "unavailable", "unknown", "null", ""}:
         return None
 
     return value

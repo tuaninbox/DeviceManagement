@@ -232,10 +232,10 @@ def upsert_modules(db: Session, device_id: int, modules: list[dict]):
             normalize_serial(m.get("serial_number"))
             for m in modules
         }
-        incoming_serials.discard(None)  # remove invalid serials
+        incoming_serials.discard(None)
 
         # ---------------------------------------------------------
-        # 2. Delete only modules with VALID serials that disappeared
+        # 2. Delete modules with VALID serials that disappeared
         # ---------------------------------------------------------
         db.query(models.Module).filter(
             models.Module.device_id == device_id,
@@ -252,7 +252,9 @@ def upsert_modules(db: Session, device_id: int, modules: list[dict]):
         for mod in modules:
             serial = normalize_serial(mod.get("serial_number"))
 
-            # Try to find existing module by serial (only if valid)
+            # -------------------------
+            # 3A. Try match by serial
+            # -------------------------
             existing = None
             if serial:
                 existing = db.query(models.Module).filter(
@@ -260,10 +262,23 @@ def upsert_modules(db: Session, device_id: int, modules: list[dict]):
                     models.Module.serial_number == serial
                 ).first()
 
+            # -------------------------
+            # 3B. Fallback match for modules WITHOUT serial
+            # Match on: name + part_number + description
+            # -------------------------
+            if not existing:
+                existing = db.query(models.Module).filter(
+                    models.Module.device_id == device_id,
+                    models.Module.serial_number.is_(None),
+                    models.Module.name == mod.get("name"),
+                    models.Module.part_number == mod.get("part_number"),
+                    models.Module.description == mod.get("description")
+                ).first()
+
+            # -------------------------
+            # 3C. UPDATE EXISTING MODULE
+            # -------------------------
             if existing:
-                # -------------------------
-                # UPDATE EXISTING MODULE
-                # -------------------------
                 existing.module_type = mod.get("module_type", existing.module_type)
                 existing.name = mod.get("name", existing.name)
                 existing.description = mod.get("description", existing.description)
@@ -271,31 +286,29 @@ def upsert_modules(db: Session, device_id: int, modules: list[dict]):
                 existing.hw_revision = mod.get("hw_revision", existing.hw_revision)
                 existing.environment_status = mod.get("environment_status", existing.environment_status)
 
-                # Only update warranty fields if incoming data is NOT None
                 if mod.get("under_warranty") is not None:
                     existing.under_warranty = mod["under_warranty"]
 
                 if mod.get("warranty_expiry") is not None:
                     existing.warranty_expiry = mod["warranty_expiry"]
 
-                # Update last_updated only if provided
                 new_last = safe_datetime(mod.get("last_updated"))
                 if new_last:
                     existing.last_updated = new_last
 
                 db_mod = existing
 
+            # -------------------------
+            # 3D. INSERT NEW MODULE
+            # -------------------------
             else:
-                # -------------------------
-                # INSERT NEW MODULE
-                # -------------------------
                 db_mod = models.Module(
                     device_id=device_id,
                     module_type=mod.get("module_type", "OTHER"),
                     name=mod.get("name"),
                     description=mod.get("description"),
                     part_number=mod.get("part_number"),
-                    serial_number=serial,  # may be None
+                    serial_number=serial,
                     hw_revision=mod.get("hw_revision"),
                     under_warranty=mod.get("under_warranty", False),
                     warranty_expiry=mod.get("warranty_expiry"),
@@ -338,7 +351,6 @@ def upsert_modules(db: Session, device_id: int, modules: list[dict]):
                 ).first()
 
                 if existing_sfp:
-                    # UPDATE SFP
                     for field in [
                         "transceiver_type", "vendor", "nominal_bitrate",
                         "wavelength", "product_id", "part_number", "revision",
@@ -350,7 +362,6 @@ def upsert_modules(db: Session, device_id: int, modules: list[dict]):
                             setattr(existing_sfp, field, value)
 
                 else:
-                    # INSERT NEW SFP
                     db_sfp = models.SfpModule(
                         module_id=db_mod.id,
                         interface_name=mod.get("interface_name"),
