@@ -148,7 +148,7 @@ def sync_devices(
 
     # Create job entry
     job_id = create_job(
-        description=f"Device sync for {','.join(hostnames) or 'ALL'}",
+        description=f"Device sync for {','.join(hostnames or []) or 'ALL'}",
         category="device_sync"
     )
 
