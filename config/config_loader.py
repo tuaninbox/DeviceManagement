@@ -132,3 +132,13 @@ def load_device_management_config():
         "config_folder": config_folder,
         "operational_folder": operational_folder,
     }
+
+
+
+# Load config.ini from project root
+config_path = Path(__file__).resolve().parent.parent / "config.ini"
+config.read(config_path)
+
+def get_jobs_db_path() -> str:
+    config = _get_config()
+    return config["database"]["jobs_db"]
