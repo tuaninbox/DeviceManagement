@@ -1,9 +1,12 @@
+from app.databases import devices
+from app.models import devices
+from app.schemas import devices
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 from sqlalchemy import func
-from app import models, schemas, crud, database
+from app import crud
 from app.services.job_manager import create_job
 from app.services.module_eox_sync import run_module_eox_sync
 from core.logging_manager import setup_loggers
@@ -18,32 +21,32 @@ def get_db_session_factory():
     Returns a callable that creates new DB sessions.
     Useful for background tasks where request-scoped DB sessions are closed.
     """
-    return database.SessionLocal
+    return devices.SessionLocal
 
 # Dependency to get DB session
 def get_db():
-    db = database.SessionLocal()
+    db = devices.SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
 # Create a single module
-@router.post("/", response_model=schemas.ModuleBase)
-def create_module(module: schemas.ModuleBase, db: Session = Depends(get_db)):
+@router.post("/", response_model=devices.ModuleBase)
+def create_module(module: devices.ModuleBase, db: Session = Depends(get_db)):
     return crud.create_module(db=db, module=module)
 
 # List all modules
-@router.get("/", response_model=List[schemas.ModuleBase])
+@router.get("/", response_model=List[devices.ModuleBase])
 def list_modules(db: Session = Depends(get_db)):
     return crud.get_modules(db)
 
 # Get module by serial number
-@router.get("/{serial_number}", response_model=schemas.ModuleBase)
+@router.get("/{serial_number}", response_model=devices.ModuleBase)
 def get_module_by_serial(serial_number: str, db: Session = Depends(get_db)):
     module = (
-        db.query(models.Module)
-        .filter(func.lower(models.Module.serial_number) == serial_number.lower())
+        db.query(devices.Module)
+        .filter(func.lower(devices.Module.serial_number) == serial_number.lower())
         .first()
     )
     if not module:
@@ -57,7 +60,7 @@ def get_module_by_serial(serial_number: str, db: Session = Depends(get_db)):
 
 @router.post("/sync-eox")
 def sync_modules_eox(
-    request: schemas.SyncEoxRequest,
+    request: devices.SyncEoxRequest,
     background: BackgroundTasks,
     db_session_factory=Depends(get_db_session_factory),
     db: Session = Depends(get_db)
@@ -72,8 +75,8 @@ def sync_modules_eox(
     if request.serial_numbers:
         normalized = {s.strip().upper() for s in request.serial_numbers}
         modules = (
-            db.query(models.Module)
-            .filter(models.Module.serial_number.in_(normalized))
+            db.query(devices.Module)
+            .filter(devices.Module.serial_number.in_(normalized))
             .all()
         )
         for m in modules:
@@ -83,9 +86,9 @@ def sync_modules_eox(
     # Case 2: Devices page → device IDs provided
     elif request.device_ids:
         modules = (
-            db.query(models.Module)
-            .filter(models.Module.device_id.in_(request.device_ids))
-            .filter(models.Module.serial_number.isnot(None))
+            db.query(devices.Module)
+            .filter(devices.Module.device_id.in_(request.device_ids))
+            .filter(devices.Module.serial_number.isnot(None))
             .all()
         )
         for m in modules:
@@ -94,8 +97,8 @@ def sync_modules_eox(
     # Case 3: No serials and no device IDs → sync ALL modules
     else:
         modules = (
-            db.query(models.Module)
-            .filter(models.Module.serial_number.isnot(None))
+            db.query(devices.Module)
+            .filter(devices.Module.serial_number.isnot(None))
             .all()
         )
         for m in modules:

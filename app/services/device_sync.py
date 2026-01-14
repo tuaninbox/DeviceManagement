@@ -1,4 +1,7 @@
-from app import models, schemas, crud, database
+from app.databases import devices
+from app.models import devices
+from app.schemas import devices
+from app import crud
 from core.load_inventory import collect_inventory
 from app.normalizers.device_normalizer import (
     normalize_device,

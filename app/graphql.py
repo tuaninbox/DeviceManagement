@@ -1,12 +1,12 @@
-from . import models
+from .models import devices
 import strawberry
 from typing import List, Optional
 from strawberry.fastapi import GraphQLRouter
 from sqlalchemy.orm import Session
-from . import database
+from .databases import devices
 
 def get_db():
-    db = database.SessionLocal()
+    db = devices.SessionLocal()
     try:
         yield db
     finally:
@@ -33,14 +33,14 @@ class Query:
     @strawberry.field
     def devices(self) -> List[Device]:
         db = next(get_db())
-        return db.query(models.Device).all()
+        return db.query(devices.Device).all()
 # Mutation root
 @strawberry.type
 class Mutation:
     @strawberry.mutation
     def addDevice(self, info, hostname: str, mgmtAddress: str, model: str, serialNumber: str) -> Device:
         db: Session = info.context["db"]
-        row = models.Device(hostname=hostname, mgmt_address=mgmtAddress, model=model, serial_number=serialNumber)
+        row = devices.Device(hostname=hostname, mgmt_address=mgmtAddress, model=model, serial_number=serialNumber)
         db.add(row)
         db.commit()
         db.refresh(row)

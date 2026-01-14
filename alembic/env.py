@@ -6,8 +6,8 @@ from sqlalchemy import pool
 from alembic import context
 
 # Import your SQLAlchemy Base and engine 
-from app.models import Base 
-from app.database import engine
+from DeviceManagement.app.models.devices import Base 
+from DeviceManagement.app.databases.devices import engine
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

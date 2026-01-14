@@ -4,7 +4,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime, timezone
-from .database import Base
+from ..databases.devices import Base
 
 # Base = declarative_base()
 
@@ -93,7 +93,7 @@ class Interface(Base):
     ip_address = Column(String)
     prefix_length = Column(Integer)
     vrf = Column(String)
-    last_updated = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    last_updated = w
     link_down_reason = Column(String)
     port_mode = Column(String)
     fec_mode = Column(String)

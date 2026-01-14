@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from app.services.job_manager import update_job
-from app import models
+from app.models import devices
 from core.eox import get_eox_data_from_sn
 
 def run_module_eox_sync(job_id, serials, db_session_factory):
@@ -28,8 +28,8 @@ def run_module_eox_sync(job_id, serials, db_session_factory):
         errors = []
 
         modules_for_update = (
-            session.query(models.Module)
-            .filter(models.Module.serial_number.in_(serials))
+            session.query(devices.Module)
+            .filter(devices.Module.serial_number.in_(serials))
             .all()
         )
 
