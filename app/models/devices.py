@@ -93,7 +93,7 @@ class Interface(Base):
     ip_address = Column(String)
     prefix_length = Column(Integer)
     vrf = Column(String)
-    last_updated = w
+    last_updated = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     link_down_reason = Column(String)
     port_mode = Column(String)
     fec_mode = Column(String)

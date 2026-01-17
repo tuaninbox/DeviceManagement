@@ -1,17 +1,33 @@
-from .models import devices
+from . import models
 from fastapi import FastAPI
-from .databases import devices
-from app.routers import devices, modules, jobs
+from . import databases
+from app.routers import devices, modules, jobs, auth
 from strawberry.fastapi import GraphQLRouter
 from .graphql import schema
 from fastapi.middleware.cors import CORSMiddleware
 
+from config.auth_loader import get_local_config
+from app.models.users import LocalUser
+from app.auth.password_utils import hash_password
+from app.databases.users import SessionLocal
+
+# from app.models.users import LocalUser, UserProfile
+
+
+
+
+
+
 # Create DB tables
 # This line tells SQLAlchemy:
 # Look at all ORM models that inherit from Base
-# Create the corresponding tables in the database if they don’t exist
+# Create the corresponding tables in the database if they don�t exist
 # This runs once at startup.
-devices.Base.metadata.create_all(bind=devices.engine)
+models.devices.Base.metadata.create_all(bind=databases.devices.engine)
+models.users.Base.metadata.create_all(bind=databases.users.engine)
+#LocalUser.metadata.create_all(bind=databases.users.engine)
+models.users.Base.metadata.create_all(bind=databases.users.engine)
+#UserProfile.metadata.create_all(bind=users_engine)
 
 app = FastAPI(title="Device Management Backend App")
 
@@ -34,6 +50,8 @@ app.add_middleware(
 app.include_router(devices.router)
 app.include_router(modules.router)
 app.include_router(jobs.router)
+app.include_router(auth.router)
+
 
 # GraphQL endpoint
 # app.include_router(graphql_app, prefix="/graphql")
@@ -44,11 +62,33 @@ app.include_router(jobs.router)
 # - Request metadata
 # This function creates a fresh DB session for each GraphQL request.
 def get_context():
-    db = devices.SessionLocal()
+    db = databases.devices.SessionLocal()
     return {"db": db}
 
 graphql_app = GraphQLRouter(schema, context_getter=get_context)
 app.include_router(graphql_app, prefix="/graphql")
+
+
+@app.on_event("startup")
+def bootstrap_local_admin():
+    cfg = get_local_config()
+    bootstrap = cfg.get("bootstrap_admin")
+
+    if not bootstrap:
+        return
+
+    db = SessionLocal()
+    existing = db.query(LocalUser).first()
+    if existing:
+        return
+
+    admin = LocalUser(
+        username=bootstrap["username"],
+        password_hash=hash_password(bootstrap["password"]),
+        roles="admin"
+    )
+    db.add(admin)
+    db.commit()
 
 # Define root router
 @app.get("/")
@@ -56,3 +96,4 @@ def root():
     # return {"message": "Device Management API is running"}
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/docs")
+

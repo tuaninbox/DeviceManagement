@@ -1,0 +1,46 @@
+auth:
+  mode: local   # ldap | oidc | local
+
+local:
+  enabled: true
+
+  # Optional: default admin bootstrap
+  bootstrap_admin:
+    username: "admin"
+    password: "admin123"   # only used if DB is empty
+
+ldap:
+  server_url: "ldap://your-ldap-server"
+  domain: "YOURDOMAIN"
+  base_dn: "DC=example,DC=com"
+
+  roles:
+    user:
+      - "CN=Users,DC=example,DC=com"
+    operator:
+      - "CN=Oper,DC=example,DC=com"
+    superuser:
+      - "CN=SuperUsers,DC=example,DC=com"
+    admin:
+      - "CN=Admins,DC=example,DC=com"
+      - "CN=DomainAdmins,DC=example,DC=com"
+
+oidc:
+  issuer: "https://login.microsoftonline.com/<tenant>/v2.0"
+  client_id: "your-client-id"
+
+  roles:
+    user:
+      - "Everyone"
+    operator:
+      - "OpsTeam"
+    superuser:
+      - "SuperUserGroup"
+    admin:
+      - "AAD-Global-Admin"
+      - "AdminGroup"
+
+jwt:
+  secret_key: "super-secret-key-change-me"
+  algorithm: "HS256"
+  session_expire_seconds: 28800

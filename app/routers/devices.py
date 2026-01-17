@@ -1,6 +1,6 @@
-from app.databases import devices
-from app.models import devices
-from app.schemas import devices
+from .. import databases
+from .. import models
+from .. import schemas
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
@@ -9,53 +9,45 @@ from sqlalchemy import func
 from app.services.job_manager import create_job
 from app.services.device_sync import run_device_sync
 from app import crud
-from app.normalizers.device_normalizer import (
-    normalize_device,
-    normalize_interfaces,
-    normalize_modules,
-    normalize_software_info,
-)
 from core.logging_manager import setup_loggers
-from config.config_loader import load_device_management_config
 from core.utility.utility import safe_read_text, MAX_FILE_BYTES
+from app.auth.dependencies import require_permission
 
 # Set up loggers
 success_logger, fail_logger = setup_loggers(logger_name="app_router_devices")
 
-router = APIRouter(prefix="/devices", tags=["devices"])
+router = APIRouter(prefix="/devices", tags=["devices"],dependencies=[Depends(require_permission("view_devices"))])
 
 def get_db_session_factory():
     """
     Returns a callable that creates new DB sessions.
     Useful for background tasks where request-scoped DB sessions are closed.
     """
-    return devices.SessionLocal
+    return databases.devices.SessionLocal
 
 # Dependency for DB session
 def get_db():
-    db = devices.SessionLocal()
+    db = databases.devices.SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
-@router.post("/", response_model=devices.Device)
-def create_device(device: devices.DeviceCreate, db: Session = Depends(get_db)):
+@router.post("/", response_model=schemas.devices.Device)
+def create_device(device: schemas.devices.DeviceCreate, db: Session = Depends(get_db)):
     success_logger.info(f"Creating device: {device.hostname}")
     return crud.create_device(db=db, device=device)
 
-
-# Get all devices
 # @router.get("/", response_model=List[schemas.Device])
-@router.get("/", response_model=devices.DeviceListResponse)
-def list_devices(page: int = 1,page_size: int = 100,db: Session = Depends(get_db)):
+@router.get("/", response_model=schemas.devices.DeviceListResponse)
+def list_devices(user = Depends(require_permission("view_devices")), page: int = 1,page_size: int = 100,db: Session = Depends(get_db)):
     success_logger.info(f"Listing devices page {page} with {page_size} devices")
     
-    # Convert page → skip
+    # Convert page ? skip
     skip = (page - 1) * page_size
 
     # Query total count
-    total = db.query(devices.Device).count()
+    total = db.query(models.devices.Device).count()
 
     # Query paginated items
     items = crud.get_devices(db, skip=skip, limit=page_size)
@@ -67,18 +59,18 @@ def list_devices(page: int = 1,page_size: int = 100,db: Session = Depends(get_db
         "page_size": page_size,
     }
 
-@router.get("/all", response_model=List[devices.Device])
+@router.get("/all", response_model=List[schemas.devices.Device])
 def list_all_devices(db: Session = Depends(get_db)):
     success_logger.info("Listing ALL devices")
     return crud.get_all_devices(db)
 
 
-@router.get("/{hostname}", response_model=devices.Device)
+@router.get("/{hostname}", response_model=schemas.devices.Device)
 def get_device_by_hostname(hostname: str, db: Session = Depends(get_db)):
     success_logger.info(f"Fetching device by hostname: {hostname}")
     device = (
-        db.query(devices.Device)
-        .filter(func.lower(devices.Device.hostname) == hostname.lower())
+        db.query(models.devices.Device)
+        .filter(func.lower(models.devices.Device.hostname) == hostname.lower())
         .first()
     )
 
@@ -91,8 +83,8 @@ def get_device_by_hostname(hostname: str, db: Session = Depends(get_db)):
 
     return device
 
-# Get configuration and operational data
-@router.get("/{hostname}/configops", response_model=devices.DeviceConfigOpsEnvelope)
+
+@router.get("/{hostname}/configops", response_model=schemas.devices.DeviceConfigOpsEnvelope)
 def get_device_config_ops(
     hostname: str,
     db: Session = Depends(get_db),
@@ -106,8 +98,8 @@ def get_device_config_ops(
     """
 
     device = (
-        db.query(devices.Device)
-        .filter(func.lower(devices.Device.hostname) == hostname.lower())
+        db.query(models.devices.Device)
+        .filter(func.lower(models.devices.Device.hostname) == hostname.lower())
         .first()
     )
 
@@ -140,10 +132,9 @@ def get_device_config_ops(
     }
 
 
-# Sync Devices
 @router.post("/sync")
 def sync_devices(
-    request: devices.SyncRequest,
+    request: schemas.devices.SyncRequest,
     background: BackgroundTasks,
     db_session_factory = Depends(get_db_session_factory)
 ):
@@ -169,4 +160,5 @@ def sync_devices(
         "job_id": job_id,
         "message": "Device sync started"
     }
+
 

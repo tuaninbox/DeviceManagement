@@ -1,0 +1,13 @@
+permissions:
+  admin:
+    - manage_users
+    - manage_devices
+    - manage_jobs
+    - view_everything
+
+  operator:
+    - manage_jobs
+    - view_devices
+
+  user:
+    - view_devices

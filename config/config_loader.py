@@ -134,11 +134,14 @@ def load_device_management_config():
     }
 
 
-
-# Load config.ini from project root
-config_path = Path(__file__).resolve().parent.parent / "config.ini"
-config.read(config_path)
-
 def get_jobs_db_path() -> str:
     config = _get_config()
     return config["database"]["jobs_db"]
+
+def get_devices_db_path() -> str:
+    config = _get_config()
+    return config["database"]["devices_db"]
+
+def get_users_db_path() -> str:
+    config = _get_config()
+    return config["database"]["users_db"]

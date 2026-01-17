@@ -1,13 +1,15 @@
+from typing import List
 from fastapi import APIRouter, HTTPException
 from app.services.job_manager import job_store
+from app.schemas.jobs import JobSchema
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
-@router.get("/")
+@router.get("/", response_model=List[JobSchema])
 def list_jobs():
     return job_store.list()
 
-@router.get("/{job_id}")
+@router.get("/{job_id}", response_model=JobSchema)
 def get_job(job_id: str):
     job = job_store.get(job_id)
     if not job:

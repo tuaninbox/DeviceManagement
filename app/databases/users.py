@@ -1,15 +1,15 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from config.config_loader import get_devices_db_path
+from config.config_loader import get_users_db_path
 
 # Load the path from config.ini
-db_path = get_devices_db_path()
+db_path = get_users_db_path()
 
 # Build a proper SQLAlchemy SQLite URL
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{db_path}"
+USERS_DATABASE_URL = f"sqlite:///{db_path}"
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    USERS_DATABASE_URL, connect_args={"check_same_thread": False}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
