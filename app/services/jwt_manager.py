@@ -39,6 +39,8 @@ def verify_session_cookie(request: Request) -> Optional[str]:
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload.get("sub")
+        return payload
+        # return payload.get("sub")
+    
     except JWTError:
         return None

@@ -1,6 +1,6 @@
 from fastapi import Request, HTTPException, Depends
 from app.services.jwt_manager import verify_session_cookie
-from config.permissions_loader import PERMISSIONS
+from config.permissions_loader import PERMISSIONS, expand_roles
 
 
 def require_auth(request: Request):
@@ -27,21 +27,15 @@ def get_current_user(request: Request):
 
     # JWT payload should contain username + roles
     return {
-        "username": user.get("username"),
+        "username": user.get("sub"),
         "roles": user.get("roles", [])
     }
 
 
 def require_permission(permission: str):
-    """
-    Generic permission checker.
-    Example usage:
-        Depends(require_permission("manage_users"))
-    """
     def wrapper(user = Depends(get_current_user)):
-        user_roles = user["roles"]
+        user_roles = expand_roles(user["roles"])
 
-        # Check if any role grants the permission
         for role in user_roles:
             allowed = PERMISSIONS.get(role, [])
             if permission in allowed:
@@ -50,6 +44,7 @@ def require_permission(permission: str):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     return wrapper
+
 
 
 def require_admin(user = Depends(get_current_user)):

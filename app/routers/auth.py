@@ -40,14 +40,20 @@ def login(payload: app.schemas.auth.LoginRequest, response: Response):
     )
 
     # Create session cookie
-    session = create_session_cookie(result)
+    session = create_session_cookie(
+        username=result["username"],
+        roles=result.get("roles", [])
+    )
+
 
     response.set_cookie(
         key="access_token",
         value=session["access_token"],
         httponly=True,
-        secure=True,
-        samesite="strict",
+        # secure=True,
+        secure=False, # for localhost
+        #samesite="strict",
+        samesite="lax", # for localhost
         max_age=60 * 60 * 24,  # 24 hours
         path="/"
     )
@@ -85,20 +91,22 @@ def refresh(request: Request, response: Response):
     user = verify_session_cookie(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-
-    session = create_session_cookie(user)
+    
+    session = create_session_cookie( username=user["sub"], roles=user.get("roles", []) )
 
     response.set_cookie(
         key="access_token",
         value=session["access_token"],
         httponly=True,
-        secure=True,
-        samesite="strict"
+        # secure=True,
+        secure=False, # for localhost
+        #samesite="strict",
+        samesite="lax", # for localhost
     )
 
     return MessageResponse(
         message="Session refreshed",
-        username=user["username"]
+        username=user["sub"]
     )
 
 

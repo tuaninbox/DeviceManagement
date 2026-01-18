@@ -11,3 +11,13 @@ permissions:
 
   user:
     - view_devices
+
+inheritance:
+  admin:
+    - operator
+    - user
+
+  operator:
+    - user
+
+  user: []
