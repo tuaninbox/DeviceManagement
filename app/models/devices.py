@@ -121,7 +121,7 @@ class Module(Base):
     serial_number = Column(String)
     hw_revision = Column(String)
     under_warranty = Column(Boolean, default=False)
-    warranty_expiry = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    warranty_expiry = Column(Date)
     environment_status = Column(String)
     last_updated = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 

@@ -35,9 +35,8 @@ def run_device_sync(job_id, hostnames, db_session_factory):
 
         # Load folders from config
         cfg = load_device_management_config()
-        config_folder = cfg["config_folder"]
-        operational_folder = cfg["operational_folder"]
-
+        config_folder = Path(cfg["config_folder"])
+        operational_folder = Path(cfg["operational_folder"])
         updated_devices = []
         errors = []
 
@@ -62,9 +61,9 @@ def run_device_sync(job_id, hostnames, db_session_factory):
             try:
                 # DEVICE METADATA
                 device_data = normalize_device(raw)
-                device_data["running_config_path"] = str(config_folder / hostname.lower())
-                device_data["routing_table_path"] = str(operational_folder / hostname.lower())
-                device_data["mac_table_path"] = str(operational_folder / hostname.lower())
+                device_data["running_config_path"] = str((config_folder/ hostname.lower()).expanduser())
+                device_data["routing_table_path"] = str((operational_folder/ hostname.lower()).expanduser())
+                device_data["mac_table_path"] = str((operational_folder/ hostname.lower()).expanduser())
 
                 db_dev = crud.upsert_device(db, device_data)
 

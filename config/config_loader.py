@@ -145,3 +145,8 @@ def get_devices_db_path() -> str:
 def get_users_db_path() -> str:
     config = _get_config()
     return config["database"]["users_db"]
+
+
+def get_inventory_config():
+    config = _get_config()
+    return config["inventory"]

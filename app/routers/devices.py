@@ -119,7 +119,7 @@ def get_device_config_ops(
         max_bytes=max_bytes
     )
 
-    result = devices.DeviceConfigOps(
+    result = schemas.devices.DeviceConfigOps(
         device=getattr(device, "name", f"{hostname}"),
         configuration=configuration,
         operationaldata=operationaldata,
