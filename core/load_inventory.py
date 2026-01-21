@@ -43,6 +43,17 @@ def collect_inventory(
                 raise ValueError(msg)
 
             inventory_rows = filtered
+        # After: inventory_rows = filtered
+
+        db = SessionLocal()
+
+        for row in inventory_rows:
+            if not row.get("OS"):
+                device = db.query(Device).filter(Device.hostname == row["Host"]).first()
+                if device and device.os:
+                    row["OS"] = device.os
+
+        db.close()
 
     except Exception:
         fail_logger.exception("Inventory filtering failed")

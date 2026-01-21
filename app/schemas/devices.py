@@ -133,6 +133,9 @@ class DeviceBase(UTCModel):
     device_group: Optional[str]
     uptime: Optional[int]
     model: Optional[str]
+    vendor: str
+    os: str
+    platform: str
     serial_number: Optional[str]
     last_updated: Optional[datetime]
 

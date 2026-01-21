@@ -21,3 +21,29 @@ inheritance:
     - user
 
   user: []
+
+commands:
+  admin:
+    cisco:
+      ios:
+        router:
+          - show version
+          - show ip route
+        switch:
+          - show version
+          - show interface status
+
+      nxos:
+        switch:
+          - show version
+          - show module
+
+  operator:
+    cisco:
+      ios:
+        router:
+          - show version
+        switch:
+          - show version
+
+

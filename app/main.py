@@ -1,7 +1,7 @@
 from . import models
 from fastapi import FastAPI
 from . import databases
-from app.routers import devices, modules, jobs, auth
+from app.routers import devices, modules, jobs, auth, commands
 from strawberry.fastapi import GraphQLRouter
 from .graphql import schema
 from fastapi.middleware.cors import CORSMiddleware
@@ -51,6 +51,7 @@ app.include_router(devices.router)
 app.include_router(modules.router)
 app.include_router(jobs.router)
 app.include_router(auth.router)
+app.include_router(commands.router) 
 
 
 # GraphQL endpoint

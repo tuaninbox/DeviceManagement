@@ -22,6 +22,9 @@ class Device(Base):
     device_group = Column(String)
     uptime = Column(Integer)
     model = Column(String)
+    vendor = Column(String, nullable=True)     # cisco, dell, juniper, etc.
+    os = Column(String, nullable=True)        # ios, iosxe, nxos, junos, etc.
+    platform = Column(String, nullable=True)   # router, switch, firewall, etc.
     serial_number = Column(String)
     last_updated = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc) )
 

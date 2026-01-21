@@ -35,19 +35,51 @@ def load_account_config():
 
 def load_nagios_config():
     nagios_config_file = None
+    hostgroups = ["ConfigBackup"]   # default fallback
+
     try:
         config = _get_config()
-        nagios_config_file = config["nagios"].get("nagios_config_file")
-    except KeyError:
-        pass
 
+        if "nagios" not in config:
+            fail_logger.error(f"{CONFIG_FILE} missing [nagios] section")
+        else:
+            nagios_section = config["nagios"]
+
+            # Load nagios_config_file
+            if "nagios_config_file" in nagios_section:
+                nagios_config_file = nagios_section.get("nagios_config_file")
+            else:
+                fail_logger.error(f"[nagios] missing 'nagios_config_file' key")
+
+            # Load hostgroups
+            if "hostgroups" in nagios_section:
+                raw_groups = nagios_section.get("hostgroups", "")
+                if raw_groups:
+                    hostgroups = [
+                        g.strip()
+                        for g in raw_groups.replace("\n", ",").split(",")
+                        if g.strip()
+                    ]
+            else:
+                fail_logger.error(f"[nagios] missing 'hostgroups' key")
+
+    except KeyError:
+        fail_logger.error(f"{CONFIG_FILE} missing [nagios] section entirely")
+
+    # Allow override via environment variable
     nagios_config_file = nagios_config_file or os.environ.get("NAGIOS_CONFIG_FILE")
 
     if not nagios_config_file:
-        fail_logger.error(f"{CONFIG_FILE} missing [nagios] section and NAGIOS_CONFIG_FILE env var not set")
+        fail_logger.error(
+            f"{CONFIG_FILE} missing [nagios] section and NAGIOS_CONFIG_FILE env var not set"
+        )
         nagios_config_file = input("Enter path to nagios config file: ")
 
-    return Path(nagios_config_file).expanduser()
+    return {
+        "config_file": Path(nagios_config_file).expanduser(),
+        "hostgroups": hostgroups,
+    }
+
 
 
 def load_backup_config():

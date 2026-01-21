@@ -1,7 +1,7 @@
 import os, getpass, configparser
 
 from core.logging_manager import setup_loggers
-from config.config_loader import load_account_config, load_cisco_eox_config#, load_nagios_config
+from config.config_loader import load_account_config, load_cisco_eox_config, load_nagios_config
 
 # Initialize loggers for this module
 success_logger, fail_logger = setup_loggers(logger_name="credential")
@@ -42,7 +42,9 @@ def get_nagios_api():
     nagios_apikey = None
 
     # Expand ~ to full path
-    filename = os.path.expanduser(load_nagios_config())
+    cfg = load_nagios_config()
+    filename = cfg["config_file"]
+
 
     # 1. Try reading from credential file using configparser
     if os.path.exists(filename):
