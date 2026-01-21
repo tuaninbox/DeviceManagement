@@ -13,8 +13,8 @@ from services.command_service import (
     validate_commands,
     run_commands_on_device,
 )
-from models.device import Device
-from dependencies import get_db, get_current_user
+from models.devices import Device
+from auth.dependencies import get_db, get_current_user
 
 
 router = APIRouter(prefix="/commands", tags=["Commands"])

@@ -2,7 +2,7 @@ import concurrent.futures
 from core.device.config import DeviceConfigCollector
 from core.device.inventory import DeviceInventoryCollector
 from netmiko import ConnectHandler
-from device.os_detection import detect_os, normalize_os
+from core.utility.detection import detect_os, normalize_os
 from app.databases.devices import SessionLocal
 from app.models.devices import Device
 

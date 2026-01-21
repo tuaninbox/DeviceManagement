@@ -135,7 +135,7 @@ class DeviceBase(UTCModel):
     model: Optional[str]
     vendor: str
     os: str
-    platform: str
+    type: str
     serial_number: Optional[str]
     last_updated: Optional[datetime]
 

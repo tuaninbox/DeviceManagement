@@ -1,6 +1,7 @@
 from .session import DeviceSession
 import sys, traceback
 from core.logging_manager import setup_loggers
+from core.utility.detection import detect_vendor, classify_device_type
 
 success_logger, fail_logger = setup_loggers(logger_name="normalize_interfaces")
 
@@ -32,6 +33,8 @@ class DeviceInventoryCollector(DeviceSession):
                 "uptime": None,
                 "serial": None,
                 "model": None,
+                "vendor": None,
+                "type": None,
                 "mgmt_interface": None,
                 "mgmt_vrf": None,
                 "location": self.location,
@@ -56,6 +59,10 @@ class DeviceInventoryCollector(DeviceSession):
             host_info["uptime"] = version_info.get("uptime") or platform_info.get("kernel_uptime")
             host_info["serial"] = version_info.get("chassis_sn") or version_info.get("processor_board_id") or hardware_info.get("processor_board_id") or hardware_info.get("serial_number") or hardware_info.get("chassis_sn")
             host_info["model"] = version_info.get("chassis") or version_info.get("platform") or hardware_info.get("model") or hardware_info.get("chassis")
+
+            host_info["vendor"] = detect_vendor(show_ver)
+            host_info["type"] = classify_device_type(host_info["model"], host_info["vendor"])
+
             return host_info
 
         except Exception as e:
