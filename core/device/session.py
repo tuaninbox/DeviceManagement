@@ -3,13 +3,11 @@ import sys, re
 import traceback
 #from napalm import get_network_driver
 from netmiko import ConnectHandler
-import subprocess, shutil
-import configparser
 from core.utility.utility import format_msg
 from core.utility.sanitizer import SecretSanitizer, ConfigSanitizer
-
-
-
+from core.utility.detection import detect_os, normalize_os
+from app.databases.devices import SessionLocal
+from app.models.devices import Device
 
 import configparser
 from pathlib import Path
@@ -42,12 +40,24 @@ class DeviceSession:
         self.result = {
             "hostname": hostname,
             "host": host,
+            "detected_os": None,
             "success": False,
             "output": "",
             "error": None
         }
 
     def _run_session(self, removepassword: int = 0, out_format: str = "text", optional_args=None):
+        # ------------------------------------------------------------
+        # 1. Lazy OS detection (moved from run_parallel)
+        # ------------------------------------------------------------
+        if not self.os or self.os == "unknown":
+            detected = detect_os(self.host, self.user, self.password, self.port)
+            normalized = normalize_os(detected)
+            self.os = normalized
+
+        # Store detected OS in result so run_parallel can update DB later
+        self.result["detected_os"] = self.os
+
         # Map OS string to Netmiko device_type
         device_type_map = {
             "ios": "cisco_ios",
@@ -59,7 +69,9 @@ class DeviceSession:
         }
         device_type = device_type_map.get(self.os)
         if not device_type:
-            self.result["error"] = f"Unsupported OS type: {self.os}"
+            # Fallback: try IOS (most common)
+            device_type = "cisco_ios"
+            self.result["error"] = f"{self.hostname} - Using default OS type: {self.os}"
             if self.fail_logger:
                 self.fail_logger.error(self.result["error"])
             return self.result

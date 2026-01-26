@@ -6,13 +6,31 @@ from config.config_loader import load_nagios_config
 
 nagios_host, nagios_apikey = get_nagios_api()
 
+def get_hostnames_from_hostgroup(show_ver_hostgroup: dict) -> list:
+    """
+    Extract a flat list of hostnames from the Nagios XI hostgroup API response.
+    """
+    hostnames = []
+
+    hostgroups = show_ver_hostgroup.get("hostgroup", [])
+    for hg in hostgroups:
+        members = hg.get("members", {})
+        hosts = members.get("host", [])
+
+        for h in hosts:
+            name = h.get("host_name")
+            if name:
+                hostnames.append(name)
+
+    return hostnames
+
 def get_hostgroup_members_from_nagios(hostgroup_name):
     url = (
         f"https://{nagios_host}/nagiosxi/api/v1/objects/hostgroupmembers"
         f"?pretty=1&apikey={nagios_apikey}&hostgroup_name={hostgroup_name}"
     )
     r = requests.get(url, verify=False)
-    return r.json().get("members", [])
+    return get_hostnames_from_hostgroup(r.json())
 
 
 def get_device_list_from_nagios(nagios_host=nagios_host, nagios_apikey=nagios_apikey):
@@ -34,7 +52,7 @@ def get_device_list_from_nagios(nagios_host=nagios_host, nagios_apikey=nagios_ap
     # 2. Query all Nagios hosts
     # ------------------------------------------------------------
     url = (
-        f"https://{nagios_host}/nagiosxi/api/v1/54342156/host"
+        f"https://{nagios_host}/nagiosxi/api/v1/objects/host"
         f"?pretty=1&apikey={nagios_apikey}&orderby=host_name:a"
     )
     r = requests.get(url, verify=False)

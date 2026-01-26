@@ -2,7 +2,7 @@ from app.databases import devices
 from app.models import devices
 from app.schemas import devices
 from app import crud
-from core.load_inventory import collect_inventory
+from DeviceManagement.core.load_device import sync_device_details
 from app.normalizers.device_normalizer import (
     normalize_device,
     normalize_interfaces,
@@ -44,7 +44,7 @@ def run_device_sync(job_id, hostnames, db_session_factory):
         # Step 1: Collect inventory from devices
         # ----------------------------------------------------
         try:
-            raw_list = collect_inventory(hostnames=hostnames)
+            raw_list = sync_device_details(hostnames=hostnames)
         except Exception as e:
             msg = f"Failed to collect inventory: {e}"
             fail_logger.error(f"[JOB {job_id}] {msg}")

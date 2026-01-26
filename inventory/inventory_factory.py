@@ -19,3 +19,9 @@ def get_inventory_provider():
         return DynamicInventoryProvider(source)
 
     raise ValueError(f"Unknown inventory type: {inv_type}")
+
+if __name__ == "__main__":
+    inv=get_inventory_provider().load()
+    for i in inv:
+        print(i)
+    print(f"Total: {len(inv)}")

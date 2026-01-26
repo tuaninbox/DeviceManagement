@@ -123,18 +123,57 @@ def classify_module_type(description: str, part_number: str = "", name: str = ""
 # ✅ Normalize Device (host_info → Device table)
 # ------------------------------------------------------------
 def normalize_device(raw: dict) -> dict:
-    host = raw["host_info"]
+    """
+    Normalize device information returned from DeviceSession.
+    Handles both success and failure cases safely.
+    """
+
+    # ------------------------------------------------------------
+    # 1. Handle failed sessions gracefully
+    # ------------------------------------------------------------
+    if not raw.get("success"):
+        return {
+            "hostname": raw.get("hostname"),
+            "mgmt_address": raw.get("host"),
+            "uptime": None,
+            "model": None,
+            "serial_number": None,
+            "device_group": None,
+            "location": None,
+            "vrf": None,
+            "os": raw.get("detected_os") or raw.get("os") or "unknown",
+            "vendor": None,
+            "type": None,
+            "last_updated": datetime.now(timezone.utc),
+            # "error": raw.get("error", "unknown error"),
+            # "success": False,
+        }
+
+    # ------------------------------------------------------------
+    # 2. Successful session
+    # ------------------------------------------------------------
+    host = raw.get("host_info", {})
+
     return {
-        "hostname": host["hostname"],
-        "mgmt_address": host["ip"],
+        "hostname": host.get("hostname") or raw.get("hostname"),
+        "mgmt_address": host.get("ip") or raw.get("host"),
         "uptime": parse_uptime(host.get("uptime")),
         "model": host.get("model"),
         "serial_number": host.get("serial"),
         "device_group": host.get("group"),
         "location": host.get("location"),
         "vrf": None,
+
+        # New fields
+        "os": raw.get("detected_os") or raw.get("os") or "unknown",
+        "vendor": host.get("vendor") or raw.get("vendor"),
+        "type": host.get("type") or raw.get("type"),
+
         "last_updated": datetime.now(timezone.utc),
+        # "error": None,
+        # "success": True,
     }
+
 
 
 # ------------------------------------------------------------

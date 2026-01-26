@@ -1,4 +1,5 @@
 from netmiko.ssh_autodetect import SSHDetect
+from ..credentials import get_credentials
 
 # Map Netmiko autodetect → your internal OS names
 OS_MAP = {
@@ -116,3 +117,54 @@ def detect_vendor(show_ver: dict) -> str:
         return "fortinet"
 
     return "unknown"
+
+def main():
+    ip = ""
+    print("=== OS Detection Test ===")
+    if not ip: 
+        ip = input("Device IP: ").strip()
+    username, password = get_credentials()
+    port_input = input("Port (default 22): ").strip()
+    port = int(port_input) if port_input else 22
+
+    print("\nDetecting OS via SSHDetect...")
+    netmiko_type = detect_os(ip, username, password, port)
+    print(f"Netmiko detected: {netmiko_type}")
+
+    normalized = normalize_os(netmiko_type)
+    print(f"Normalized OS: {normalized}")
+
+    print("\n=== Vendor + Model + Type Test ===")
+    print("NOTE: This requires you to paste Genie 'show version' JSON output.")
+
+    try:
+        raw_json = input("\nPaste show version JSON dict (or leave blank to skip): ").strip()
+        if raw_json:
+            import json
+            show_ver = json.loads(raw_json)
+
+            vendor = detect_vendor(show_ver)
+            print(f"Vendor: {vendor}")
+
+            # Try to extract model if present
+            version_info = show_ver.get("version", {})
+            platform_info = show_ver.get("platform", {})
+            model = (
+                version_info.get("chassis")
+                or version_info.get("platform")
+                or platform_info.get("hardware", {}).get("model")
+                or "unknown"
+            )
+            print(f"Model: {model}")
+
+            device_type = classify_device_type(model, vendor)
+            print(f"Device Type: {device_type}")
+
+    except Exception as e:
+        print(f"Error parsing show version JSON: {e}")
+
+    print("\n=== Test Complete ===")
+
+
+if __name__ == "__main__":
+    main()

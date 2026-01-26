@@ -10,6 +10,6 @@ class JobModel(JobsBase):
     description = Column(String)
     status = Column(String)
     started_at = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc) )
-    finished_at = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc) )
+    finished_at = Column( DateTime(timezone=True), nullable = True )
     result = Column(Text)
     error = Column(Text)

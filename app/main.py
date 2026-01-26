@@ -13,15 +13,7 @@ from app.databases.users import SessionLocal
 
 # from app.models.users import LocalUser, UserProfile
 
-
-
-
-
-
-# Create DB tables
-# This line tells SQLAlchemy:
-# Look at all ORM models that inherit from Base
-# Create the corresponding tables in the database if they don�t exist
+# Create the corresponding tables in the database if they don't exist
 # This runs once at startup.
 models.devices.Base.metadata.create_all(bind=databases.devices.engine)
 models.users.Base.metadata.create_all(bind=databases.users.engine)

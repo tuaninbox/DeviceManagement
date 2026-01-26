@@ -2,7 +2,6 @@ import concurrent.futures
 from core.device.config import DeviceConfigCollector
 from core.device.inventory import DeviceInventoryCollector
 from netmiko import ConnectHandler
-from core.utility.detection import detect_os, normalize_os
 from app.databases.devices import SessionLocal
 from app.models.devices import Device
 
@@ -11,8 +10,8 @@ def run_parallel(
     cmd,
     username,
     password,
-    collector_type: str = "inventory",   # "inventory" or "config"
-    config_mode: str = "return",         # "return" or "file"
+    collector_type: str = "inventory",
+    config_mode: str = "return",
     filterlist=None,
     sanitizeconfig=True,
     removepassword: int = 15,
@@ -21,6 +20,17 @@ def run_parallel(
     rows = list(reader)
     results = []
 
+    # ------------------------------------------------------------
+    # 1. Preload OS from DB once (avoids DB reads inside threads)
+    # ------------------------------------------------------------
+    db = SessionLocal()
+    db_devices = db.query(Device).all()
+    db_os_map = {d.hostname.lower(): (d.os or "").lower() for d in db_devices}
+    db.close()
+
+    # ------------------------------------------------------------
+    # 2. Determine collector class
+    # ------------------------------------------------------------
     if collector_type == "inventory":
         CollectorClass = DeviceInventoryCollector
         run_method = "get_inventory"
@@ -30,33 +40,39 @@ def run_parallel(
     else:
         raise ValueError(f"Unsupported collector_type: {collector_type}")
 
+    # ------------------------------------------------------------
+    # 3. Threaded execution
+    # ------------------------------------------------------------
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = []
+
         for row in rows:
-            if row["Host"].startswith("#"):
-                continue
-            if filterlist and row["Host"].lower() not in filterlist:
+            hostname = row["Host"]
+
+            # Skip commented rows
+            if hostname.startswith("#"):
                 continue
 
-            os_type = row.get("OS", "").strip().lower()
+            # Skip if filtered out
+            if filterlist and hostname.lower() not in filterlist:
+                continue
 
-            # Lazy OS detection
-            if not os_type:
-                detected = detect_os(row["IP"], username, password, row["Port"])
-                os_type = normalize_os(detected)
+            # --------------------------------------------------------
+            # Inject OS from DB preload (fast, no DB inside threads)
+            # --------------------------------------------------------
+            os_type = (row.get("OS") or "").strip().lower()
+            if not os_type or os_type == "unknown":
+                os_type = db_os_map.get(hostname.lower(), "unknown")
                 row["OS"] = os_type
 
-                # Cache OS in DB
-                db = SessionLocal()
-                device = db.query(Device).filter(Device.hostname == row["Host"]).first()
-                if device:
-                    device.os = os_type
-                    db.commit()
-                db.close()
-
-
+            # --------------------------------------------------------
+            # Select commands for this OS
+            # --------------------------------------------------------
             device_cmds = cmd.get(os_type, []) if isinstance(cmd, dict) else cmd
 
+            # --------------------------------------------------------
+            # Create collector session
+            # --------------------------------------------------------
             retriever = CollectorClass(
                 hostname=row["Host"],
                 host=row["IP"],
@@ -74,10 +90,34 @@ def run_parallel(
 
             futures.append(executor.submit(getattr(retriever, run_method)))
 
+        # ------------------------------------------------------------
+        # 4. Collect results
+        # ------------------------------------------------------------
         for future in futures:
             results.append(future.result())
 
+    # ------------------------------------------------------------
+    # 5. Batch update OS in DB (after all threads finish)
+    # ------------------------------------------------------------
+    db = SessionLocal()
+    for row, result in zip(rows, results):
+        detected_os = result.get("detected_os")
+        if not detected_os or detected_os == "unknown":
+            continue
+
+        hostname = row["Host"]
+        device = db.query(Device).filter(Device.hostname == hostname).first()
+        if device and device.os != detected_os:
+            device.os = detected_os
+
+    db.commit()
+    db.close()
+
     return results
+
+
+    return results
+
 
 def run_single_command(device, command: str, username: str, password: str) -> str:
     """
@@ -87,7 +127,7 @@ def run_single_command(device, command: str, username: str, password: str) -> st
 
     device_type_map = {
         "ios": "cisco_ios",
-        "iosxe": "cisco_iosxe",
+        "iosxe": "cisco_xe",
         "nxos": "cisco_nxos",
         "dellos10": "dell_os10",
         "junos": "juniper_junos",

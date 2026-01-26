@@ -1,24 +1,32 @@
 # routers/commands.py
-
+from .. import databases
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from schemas.command import (
+from ..schemas.commands import (
     RunCommandRequest,
     DeviceCommandResponse,
     AvailableCommandsResponse,
 )
-from services.command_service import (
+from ..services.command_manager import (
     get_allowed_commands_for_device,
     validate_commands,
     run_commands_on_device,
 )
-from models.devices import Device
-from auth.dependencies import get_db, get_current_user
+from ..models.devices import Device
+from ..auth.dependencies import get_current_user
 
 
 router = APIRouter(prefix="/commands", tags=["Commands"])
 
+
+# Dependency for DB session
+def get_db():
+    db = databases.devices.SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # ------------------------------------------------------------
 # GET /commands/available?device_id=123
