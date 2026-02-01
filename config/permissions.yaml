@@ -4,9 +4,11 @@ permissions:
     - manage_devices
     - manage_jobs
     - view_everything
+    - view_device_configs
 
   operator:
-    - manage_jobs
+    - manage_devices
+    - view_device_configs
     - view_devices
 
   user:

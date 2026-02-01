@@ -128,6 +128,7 @@ class VLANBase(UTCModel):
 class DeviceBase(UTCModel):
     hostname: str
     mgmt_address: str
+    port: int = 22
     vrf: Optional[str]
     location: Optional[str]
     device_group: Optional[str]

@@ -1,5 +1,6 @@
 from . import models
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from .schemas import devices as schemas_devices
 from core.logging_manager import setup_loggers
 from core.utility.utility import safe_datetime
@@ -10,8 +11,25 @@ from app.normalizers.device_normalizer import (
 # Initialize loggers for this CRUD module
 success_logger, fail_logger = setup_loggers(logger_name="app_crud")
 
-def get_device(db: Session, device_id: int):
-    return db.query(models.devices.Device).filter(models.Device.id == device_id).first()
+def get_device(db: Session, hostname):
+    # Case 1: hostname is a list → return list of devices
+    if isinstance(hostname, (list, tuple, set)):
+        normalized = [h.lower() for h in hostname]
+
+        return (
+            db.query(models.devices.Device)
+            .filter(func.lower(models.devices.Device.hostname).in_(normalized))
+            .all()
+        )
+
+    # Case 2: hostname is a single string → return one device
+    return (
+        db.query(models.devices.Device)
+        .filter(func.lower(models.devices.Device.hostname) == hostname.lower())
+        .first()
+    )
+
+
 
 # db.query(models.Device): create a SQLAlchemy query object targeting Device table = Select * FROM devices
 # offset(skip), default skip = 0 -> skip nothing
@@ -39,12 +57,10 @@ def upsert_device(db: Session, device_data: dict):
     )
 
     if db_device:
-        # Update existing fields
+        # Only update fields when collector provides real data
         for key, value in device_data.items():
-            setattr(db_device, key, value)
-
+            safe_set(db_device, key, value)
     else:
-        # Create new device
         db_device = models.devices.Device(**device_data)
         db.add(db_device)
 
@@ -397,7 +413,9 @@ def upsert_modules(db: Session, device_id: int, modules: list[dict]):
         )
         raise
 
-
+def safe_set(device, field, value):
+    if value is not None and value != "":
+        setattr(device, field, value)
 
 
 # def upsert_modules(db: Session, device_id: int, modules: list[dict]):

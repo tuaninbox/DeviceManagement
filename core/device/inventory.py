@@ -2,6 +2,7 @@ from .session import DeviceSession
 import sys, traceback
 from core.logging_manager import setup_loggers
 from core.utility.detection import detect_vendor, classify_device_type
+from core.utility.detection import detect_os, normalize_os
 
 success_logger, fail_logger = setup_loggers(logger_name="normalize_interfaces")
 
@@ -13,10 +14,16 @@ class DeviceInventoryCollector(DeviceSession):
                 "iosxe": ["show version"],
                 "nxos": ["show version"],
             }
+            # # Ensure OS is detected before selecting commands
+            # if not self.os or self.os.strip().lower() == "unknown":
+            #     detected = detect_os(self.host, self.user, self.password, self.port)
+            #     self.os = normalize_os(detected)
+            #     self.result["detected_os"] = self.os
 
             commands = os_cmds.get(self.os.lower())
             if not commands:
-                raise ValueError(f"Unsupported OS type: {self.os}")
+                raise ValueError(f"Unsupported OS type after detection: {self.os}")
+
 
             original_cmdlist = self.cmdlist
             self.cmdlist = commands
@@ -552,32 +559,58 @@ class DeviceInventoryCollector(DeviceSession):
                 })
         return modules
 
-    def get_inventory(self):
-        """
-        Gather complete device inventory by delegating to individual functions:
-        - get_host_info()
-        - get_interfaces()
-        - get_modules()
-        Returns a single structured dict snapshot.
-        """
-        try:
-            inventory = {
-                "host_info": self.get_host_info(),
-                "interfaces": self.get_interfaces(),
-                "modules": self.get_modules(),
-            }
-            return inventory
+def get_inventory(self):
+    try:
+        # Detect OS once
+        if not self.os or self.os.strip().lower() == "unknown":
+            detected = detect_os(self.host, self.user, self.password, self.port)
+            self.os = normalize_os(detected)
+            self.result["detected_os"] = self.os
 
-        except Exception as e:
-            tb = traceback.extract_tb(sys.exc_info()[2])[0]
-            self.result["success"] = False
-            self.result["error"] = {
+        # Open persistent SSH session
+        self.open_connection()
+
+        # Run collectors
+        host_info = self.get_host_info()
+        interfaces = self.get_interfaces()
+        modules = self.get_modules()
+
+        return {
+            "success": True,
+            "hostname": self.hostname,
+            "host": self.host,
+            "port": self.port,
+            "detected_os": self.os,
+
+            "host_info": host_info,
+            "interfaces": interfaces,
+            "modules": modules,
+
+            "location": self.location,
+            "device_group": self.group,
+        }
+
+    except Exception as e:
+        tb = traceback.extract_tb(sys.exc_info()[2])[0]
+        return {
+            "success": False,
+            "hostname": self.hostname,
+            "host": self.host,
+            "port": self.port,
+            "detected_os": self.os,
+            "error": {
                 "message": str(e),
                 "filename": tb.filename,
                 "line": tb.lineno,
                 "code": tb.line
             }
-            return self.result
+        }
+
+    finally:
+        # Always close SSH session, even on failure
+        self.close()
+
+
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from sqlalchemy import func
 from app.services.job_manager import create_job
-from app.services.device_sync import run_device_sync
+from app.services.device_manager import run_device_sync, load_inventory_to_db
 from app import crud
 from core.logging_manager import setup_loggers
 from core.utility.utility import safe_read_text, MAX_FILE_BYTES
@@ -60,13 +60,21 @@ def list_devices(user = Depends(require_permission("view_devices")), page: int =
     }
 
 @router.get("/all", response_model=List[schemas.devices.Device])
-def list_all_devices(db: Session = Depends(get_db)):
+def list_all_devices(
+    user = Depends(require_permission("view_devices")),
+    db: Session = Depends(get_db)
+):
     success_logger.info("Listing ALL devices")
     return crud.get_all_devices(db)
 
 
+
 @router.get("/{hostname}", response_model=schemas.devices.Device)
-def get_device_by_hostname(hostname: str, db: Session = Depends(get_db)):
+def get_device_by_hostname(
+    hostname: str,
+    user = Depends(require_permission("view_devices")),
+    db: Session = Depends(get_db)
+):
     success_logger.info(f"Fetching device by hostname: {hostname}")
     device = (
         db.query(models.devices.Device)
@@ -84,11 +92,13 @@ def get_device_by_hostname(hostname: str, db: Session = Depends(get_db)):
     return device
 
 
+
 @router.get("/{hostname}/configops", response_model=schemas.devices.DeviceConfigOpsEnvelope)
 def get_device_config_ops(
     hostname: str,
+    user = Depends(require_permission("view_device_configs")),
     db: Session = Depends(get_db),
-    max_bytes: int = MAX_FILE_BYTES,  # allow clients to limit returned size
+    max_bytes: int = MAX_FILE_BYTES,
 ):
     """
     Returns configuration and operational data for a single device.
@@ -114,13 +124,14 @@ def get_device_config_ops(
         getattr(device, "running_config_path", None),
         max_bytes=max_bytes
     )
+
     operationaldata = safe_read_text(
         getattr(device, "routing_table_path", None),
         max_bytes=max_bytes
     )
 
     result = schemas.devices.DeviceConfigOps(
-        device=getattr(device, "name", f"{hostname}"),
+        device=device.hostname,
         configuration=configuration,
         operationaldata=operationaldata,
     )
@@ -136,18 +147,16 @@ def get_device_config_ops(
 def sync_devices(
     request: schemas.devices.SyncRequest,
     background: BackgroundTasks,
+    user = Depends(require_permission("manage_devices")),
     db_session_factory = Depends(get_db_session_factory)
 ):
     hostnames = request.hostnames or None
 
-    # Create job entry
     job_id = create_job(
         description=f"Device sync for {','.join(hostnames or []) or 'ALL'}",
         category="device_sync"
     )
 
-
-    # Queue background task
     background.add_task(
         run_device_sync,
         job_id,
@@ -161,4 +170,25 @@ def sync_devices(
         "message": "Device sync started"
     }
 
+@router.post("/load-inventory")
+def load_inventory_endpoint(
+    background: BackgroundTasks,
+    user = Depends(require_permission("manage_devices")),
+    db_session_factory = Depends(get_db_session_factory)
+):
+    job_id = create_job(
+        description="Load inventory from provider into database",
+        category="inventory_load"
+    )
 
+    background.add_task(
+        load_inventory_to_db,
+        job_id,
+        db_session_factory
+    )
+
+    return {
+        "success": True,
+        "job_id": job_id,
+        "message": "Inventory load started"
+    }

@@ -89,3 +89,44 @@ def safe_read_text(path_str: Optional[str], max_bytes: int = MAX_FILE_BYTES) -> 
     except Exception as exc:
         # Return a formatted error string instead of None.
         return f"[Unable to read file: {path.name}. Error: {type(exc).__name__}: {exc}]"
+
+
+
+def extract_hostname(raw):
+    # Case 1: raw is a string
+    if isinstance(raw, str):
+        return raw.strip()
+
+    # Case 2: raw is a dict
+    if isinstance(raw, dict):
+        # direct keys
+        for key in ("hostname", "host", "Host", "HOST"):
+            if key in raw and isinstance(raw[key], str):
+                return raw[key].strip()
+
+        # nested host_info
+        if "host_info" in raw and isinstance(raw["host_info"], dict):
+            for key in ("hostname", "host", "Host", "HOST"):
+                if key in raw["host_info"] and isinstance(raw["host_info"][key], str):
+                    return raw["host_info"][key].strip()
+
+    # Case 3: SQLAlchemy Device object
+    if hasattr(raw, "hostname"):
+        return raw.hostname.strip()
+
+    return "unknown-device"
+
+def extract_mgmt_address(raw: dict):
+    # Direct keys
+    for key in ("mgmt_address", "ip", "host", "mgmt", "address"):
+        if key in raw and isinstance(raw[key], str):
+            return raw[key].strip()
+
+    # Nested host_info
+    host_info = raw.get("host_info")
+    if isinstance(host_info, dict):
+        for key in ("ip", "mgmt_address", "host", "mgmt"):
+            if key in host_info and isinstance(host_info[key], str):
+                return host_info[key].strip()
+
+    return None

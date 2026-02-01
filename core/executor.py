@@ -94,7 +94,7 @@ def run_parallel(
         # 4. Collect results
         # ------------------------------------------------------------
         for future in futures:
-            results.append(future.result())
+            results.append(future.result(timeout=30))
 
     # ------------------------------------------------------------
     # 5. Batch update OS in DB (after all threads finish)
@@ -114,10 +114,6 @@ def run_parallel(
     db.close()
 
     return results
-
-
-    return results
-
 
 def run_single_command(device, command: str, username: str, password: str) -> str:
     """
@@ -160,3 +156,5 @@ def run_commands_on_device(device, commands, username, password):
         output = run_single_command(device, cmd, username, password)
         results.append({"command": cmd, "result": output})
     return results
+
+

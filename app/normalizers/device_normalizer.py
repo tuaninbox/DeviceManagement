@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 from datetime import datetime, timezone
 import re
 from core.logging_manager import setup_loggers
+from core.utility.utility import extract_hostname, extract_mgmt_address
 
 success_logger, fail_logger = setup_loggers(logger_name="app_normalizers")
 
@@ -128,13 +129,18 @@ def normalize_device(raw: dict) -> dict:
     Handles both success and failure cases safely.
     """
 
+    hostname = extract_hostname(raw)
+    mgmt_address = extract_mgmt_address(raw)
+    host = raw.get("host_info", {})
+
     # ------------------------------------------------------------
     # 1. Handle failed sessions gracefully
     # ------------------------------------------------------------
     if not raw.get("success"):
         return {
-            "hostname": raw.get("hostname"),
-            "mgmt_address": raw.get("host"),
+            "hostname": hostname,
+            "mgmt_address": mgmt_address,
+            "port": raw.get("port") or 22,
             "uptime": None,
             "model": None,
             "serial_number": None,
@@ -142,21 +148,18 @@ def normalize_device(raw: dict) -> dict:
             "location": None,
             "vrf": None,
             "os": raw.get("detected_os") or raw.get("os") or "unknown",
-            "vendor": None,
-            "type": None,
+            "vendor": host.get("vendor") or raw.get("vendor"),
+            "type": host.get("type") or raw.get("type"),
             "last_updated": datetime.now(timezone.utc),
-            # "error": raw.get("error", "unknown error"),
-            # "success": False,
         }
 
     # ------------------------------------------------------------
     # 2. Successful session
     # ------------------------------------------------------------
-    host = raw.get("host_info", {})
-
     return {
-        "hostname": host.get("hostname") or raw.get("hostname"),
+        "hostname": hostname,
         "mgmt_address": host.get("ip") or raw.get("host"),
+        "port": raw.get("port") or 22,
         "uptime": parse_uptime(host.get("uptime")),
         "model": host.get("model"),
         "serial_number": host.get("serial"),
@@ -164,14 +167,11 @@ def normalize_device(raw: dict) -> dict:
         "location": host.get("location"),
         "vrf": None,
 
-        # New fields
         "os": raw.get("detected_os") or raw.get("os") or "unknown",
         "vendor": host.get("vendor") or raw.get("vendor"),
         "type": host.get("type") or raw.get("type"),
 
         "last_updated": datetime.now(timezone.utc),
-        # "error": None,
-        # "success": True,
     }
 
 

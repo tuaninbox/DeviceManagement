@@ -17,16 +17,18 @@ class Device(Base):
     id = Column(Integer, primary_key=True, index=True)
     hostname = Column(String, unique=True, nullable=False)
     mgmt_address = Column(String, nullable=False)
+    port = Column(Integer, nullable=False, default=22)
+
     vrf = Column(String)
     location = Column(String)
     device_group = Column(String)
     uptime = Column(Integer)
     model = Column(String)
-    vendor = Column(String, nullable=True)     # cisco, dell, juniper, etc.
-    os = Column(String, nullable=True)        # ios, iosxe, nxos, junos, etc.
-    type = Column(String, nullable=True)   # router, switch, firewall, etc.
+    vendor = Column(String, nullable=True)
+    os = Column(String, nullable=True)
+    type = Column(String, nullable=True)
     serial_number = Column(String)
-    last_updated = Column( DateTime(timezone=True), default=lambda: datetime.now(timezone.utc) )
+    last_updated = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Git-backed file paths
     running_config_path = Column(String)
@@ -38,6 +40,7 @@ class Device(Base):
     modules = relationship("Module", back_populates="device", cascade="all, delete-orphan")
     interfaces = relationship("Interface", back_populates="device", cascade="all, delete-orphan")
     vlans = relationship("VLAN", back_populates="device", cascade="all, delete-orphan")
+
 
 # -------------------------
 # Software Version
